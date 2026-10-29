@@ -1,9 +1,9 @@
-# Link Kutusu
+# Link Cepte
 
 Favori linklerinizi seçtiğiniz klasörde `.url` dosyaları olarak saklayan Android uygulaması.
 
-- Klasör seçimi, alt klasörler, yukarı/aşağı sıralama
-- Zip ile yedekleme ve geri yükleme
+- Klasör seçimi, alt klasörler, sıralama
+- Linkleri klasörler arasında taşıma
 - Tarayıcıdan "Paylaş" ile tek dokunuşla kaydetme
 
 ## APK

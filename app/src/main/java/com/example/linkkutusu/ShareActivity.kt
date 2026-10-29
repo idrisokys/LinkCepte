@@ -14,7 +14,7 @@ class ShareActivity : Activity() {
         val root = Store.root(this)
         val msg = when {
             url == null -> "Link bulunamadı"
-            root == null -> "Önce uygulamayı açıp klasör seçin"
+            root == null -> "Önce Link Cepte’yi açıp klasör seçin"
             else -> {
                 val title = intent.getStringExtra(Intent.EXTRA_SUBJECT)?.takeIf { it.isNotBlank() }
                     ?: text.replace(url, "").trim().takeIf { it.isNotBlank() }
