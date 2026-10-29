@@ -12,18 +12,22 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -32,7 +36,9 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -105,12 +111,81 @@ fun App(resume: Int = 0) {
         if (selecting) selected = emptySet() else stack = stack.dropLast(1)
     }
 
-    fun swap(i: Int, d: Int) {
-        val l = list.toMutableList(); val j = i + d
-        if (j !in l.indices) return
-        l.add(j, l.removeAt(i)); loaded = l
-        val names = l.map { it.name }
-        run(reload = false) { Store.saveOrder(ctx, current, names) }
+    // ---- Sürükle-bırak: sıralama + klasöre taşıma ----
+    val listState = rememberLazyListState()
+    val currentDir by rememberUpdatedState(current)
+    var dragKey by remember { mutableStateOf<String?>(null) }   // sürüklenen satır
+    var dragY by remember { mutableFloatStateOf(0f) }           // sürüklenen satırın merkezi (liste koordinatı)
+    var dropKey by remember { mutableStateOf<String?>(null) }   // üzerine bırakılacak klasör
+    var startOrder by remember { mutableStateOf(listOf<String>()) }
+
+    fun dragStart(key: String) {
+        val it = listState.layoutInfo.visibleItemsInfo.firstOrNull { x -> x.key == key } ?: return
+        dragKey = key; dropKey = null
+        dragY = it.offset + it.size / 2f
+        startOrder = loaded?.map { x -> x.key } ?: emptyList()
+    }
+    fun dragMove(dy: Float) {
+        val key = dragKey ?: return
+        dragY += dy
+        val l = loaded ?: return
+        val vis = listState.layoutInfo.visibleItemsInfo
+        val from = l.indexOfFirst { it.key == key }
+        val me = vis.firstOrNull { it.key == key } ?: return
+        if (from < 0 || me.index != from) return            // yerleşim henüz güncellenmedi
+        val y = dragY.toInt()
+        val over = vis.firstOrNull { it.key != key && y >= it.offset && y < it.offset + it.size }
+        if (over == null) { dropKey = null; return }
+        val target = l.getOrNull(over.index) ?: return
+        val frac = (y - over.offset).toFloat() / over.size
+        val down = over.index > from
+        if (!l[from].isDir && target.isDir) {
+            // Link klasörün ortasındaysa: klasöre bırakma. Karşı kenara geçerse: klasörü atla.
+            if (frac in 0.2f..0.8f) { dropKey = target.key; return }
+            dropKey = null
+            if (!((down && frac > 0.8f) || (!down && frac < 0.2f))) return
+        } else {
+            dropKey = null
+            if (!(if (down) frac > 0.5f else frac < 0.5f)) return
+        }
+        val m = l.toMutableList(); m.add(over.index, m.removeAt(from)); loaded = m
+    }
+    fun dragEnd(cancel: Boolean) {
+        val key = dragKey ?: return
+        val drop = dropKey
+        dragKey = null; dropKey = null
+        val l = loaded ?: return
+        if (cancel) { tick++; return }
+        val e = l.firstOrNull { it.key == key } ?: return
+        val folder = drop?.let { d -> l.firstOrNull { it.key == d } }
+        if (folder != null) {
+            loaded = l.filter { it.key != key }
+            scope.launch {
+                val ok = lock.withLock { withContext(Dispatchers.IO) { Store.moveLink(ctx, e, folder.uri) } }
+                tick++
+                toast(if (ok) "“${e.name.removeSuffix(".url")}” → ${folder.name}" else "Taşınamadı")
+            }
+        } else if (l.map { it.key } != startOrder) {
+            val names = l.map { it.name }
+            val dir = currentDir
+            run(reload = false) { Store.saveOrder(ctx, dir, names) }
+        }
+    }
+    // Liste kenarına yaklaşınca otomatik kaydır
+    LaunchedEffect(dragKey) {
+        while (dragKey != null) {
+            val info = listState.layoutInfo
+            val edge = 120f
+            val top = info.viewportStartOffset + edge
+            val bottom = info.viewportEndOffset - edge
+            val d = when {
+                dragY < top -> -(((top - dragY) / edge) * 24f).coerceIn(4f, 24f)
+                dragY > bottom -> (((dragY - bottom) / edge) * 24f).coerceIn(4f, 24f)
+                else -> 0f
+            }
+            if (d != 0f) { listState.scrollBy(d); dragMove(0f) }
+            delay(16)
+        }
     }
     fun open(e: Entry) {
         scope.launch {
@@ -176,34 +251,60 @@ fun App(resume: Int = 0) {
         if (loaded != null && list.isEmpty()) Box(Modifier.padding(pad).fillMaxSize().padding(32.dp), Alignment.Center) {
             Text("Burada henüz bir şey yok. Alttaki alana link veya metin yapıştırın ya da tarayıcıda Paylaş → Link Cepte'yi seçin.")
         }
-        LazyColumn(Modifier.padding(pad).fillMaxSize()) {
-            itemsIndexed(list, key = { _, e -> e.key }) { i, e ->
+        LazyColumn(Modifier.padding(pad).fillMaxSize(), state = listState) {
+            items(list, key = { it.key }) { e ->
                 val sel = e.key in selected
-                ListItem(
-                    modifier = Modifier.combinedClickable(
-                        onClick = {
-                            when {
-                                selecting -> if (!e.isDir) toggle(e)
-                                e.isDir -> stack = stack + e
-                                else -> open(e)
+                val dragging = e.key == dragKey
+                val hot = e.key == dropKey
+                Column(
+                    Modifier
+                        .then(if (dragging) Modifier else Modifier.animateItemPlacement())
+                        .zIndex(if (dragging) 1f else 0f)
+                        .graphicsLayer {
+                            if (dragging) {
+                                val info = listState.layoutInfo.visibleItemsInfo.firstOrNull { x -> x.key == e.key }
+                                if (info != null) translationY = dragY - (info.offset + info.size / 2f)
                             }
-                        },
-                        onLongClick = { if (!e.isDir) toggle(e) }),
-                    colors = ListItemDefaults.colors(containerColor = if (sel) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface),
-                    leadingContent = {
-                        if (selecting && !e.isDir) Checkbox(sel, null)
-                        else Icon(if (e.isDir) Icons.Default.Folder else Icons.Default.Link, null)
-                    },
-                    headlineContent = { Text(e.name.removeSuffix(".url"), maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    trailingContent = {
-                        if (!selecting && editMode) Row {
-                            IconButton({ renaming = e }, Modifier.size(40.dp)) { Icon(Icons.Default.Edit, "Adı değiştir") }
-                            IconButton({ swap(i, -1) }, Modifier.size(40.dp), enabled = i > 0) { Icon(Icons.Default.KeyboardArrowUp, "Yukarı") }
-                            IconButton({ swap(i, 1) }, Modifier.size(40.dp), enabled = i < list.size - 1) { Icon(Icons.Default.KeyboardArrowDown, "Aşağı") }
-                            IconButton({ toDelete = listOf(e) }, Modifier.size(40.dp)) { Icon(Icons.Default.Delete, "Sil") }
                         }
-                    })
-                HorizontalDivider()
+                ) {
+                    ListItem(
+                        modifier = Modifier.combinedClickable(
+                            onClick = {
+                                when {
+                                    selecting -> if (!e.isDir) toggle(e)
+                                    e.isDir -> stack = stack + e
+                                    else -> open(e)
+                                }
+                            },
+                            onLongClick = { if (!e.isDir) toggle(e) }),
+                        colors = ListItemDefaults.colors(containerColor = when {
+                            hot -> MaterialTheme.colorScheme.primaryContainer
+                            dragging -> MaterialTheme.colorScheme.surfaceVariant
+                            sel -> MaterialTheme.colorScheme.secondaryContainer
+                            else -> MaterialTheme.colorScheme.surface
+                        }),
+                        leadingContent = {
+                            if (selecting && !e.isDir) Checkbox(sel, null)
+                            else Icon(if (e.isDir) (if (hot) Icons.Default.FolderOpen else Icons.Default.Folder) else Icons.Default.Link, null)
+                        },
+                        headlineContent = { Text(e.name.removeSuffix(".url"), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        trailingContent = {
+                            if (!selecting && editMode) Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton({ renaming = e }, Modifier.size(40.dp)) { Icon(Icons.Default.Edit, "Adı değiştir") }
+                                IconButton({ toDelete = listOf(e) }, Modifier.size(40.dp)) { Icon(Icons.Default.Delete, "Sil") }
+                                Icon(
+                                    Icons.Default.DragHandle, "Sürükle",
+                                    Modifier.size(48.dp).padding(12.dp).pointerInput(e.key) {
+                                        detectDragGestures(
+                                            onDragStart = { dragStart(e.key) },
+                                            onDrag = { change, amount -> change.consume(); dragMove(amount.y) },
+                                            onDragEnd = { dragEnd(false) },
+                                            onDragCancel = { dragEnd(true) })
+                                    })
+                            }
+                        })
+                    HorizontalDivider()
+                }
             }
         }
     }

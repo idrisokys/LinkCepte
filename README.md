@@ -15,8 +15,9 @@ Hesap yok, reklam yok. Linkleriniz yalnızca sizin seçtiğiniz klasörde durur.
   URL=https://ornek.com
   ```
 - **Klasörler:** Linkleri alt klasörlerde düzenleyin.
-- **Düzenleme modu:** Üstteki kalem simgesine basınca satırlarda ad değiştirme, sıralama ve silme butonları görünür. Tekrar basınca gizlenir.
-- **Sıralama:** Yukarı/aşağı oklarıyla istediğiniz sıraya getirin. Sıra, her klasördeki gizli `.order.txt` dosyasında tutulur.
+- **Düzenleme modu:** Üstteki kalem simgesine basınca satırlarda ad değiştirme, silme ve sürükleme tutamacı görünür. Tekrar basınca gizlenir.
+- **Sürükle-bırak:** Düzenleme modunda satırın sağındaki ☰ tutamacından tutup sürükleyin. Başka bir satırın üstüne bırakırsanız sıra değişir, **bir klasörün üstüne bırakırsanız link o klasöre taşınır** (klasör vurgulanır).
+- **Sıralama:** Sürükleyerek istediğiniz sıraya getirin. Sıra, her klasördeki gizli `.order.txt` dosyasında tutulur.
 - **Ad değiştirme:** Kalem simgesiyle link veya klasör adını değiştirin.
 - **Taşıma:** Bir linke uzun basıp birden fazla link seçin, taşı simgesiyle başka bir klasöre aktarın. Taşırken **yeni klasör** da oluşturabilirsiniz.
 - **Yenile:** Üstteki yenile düğmesi listeyi yeniden okur. Uygulamaya her dönüşte liste kendiliğinden yenilenir.
@@ -31,7 +32,8 @@ Hesap yok, reklam yok. Linkleriniz yalnızca sizin seçtiğiniz klasörde durur.
 | Klasöre girmek | Klasör satırına dokunun, geri için sol üstteki ok |
 | Yeni klasör | Üstteki klasör+ simgesi |
 | Düzenlemek | Üstteki kalem simgesine basın, butonlar görünür |
-| Sıralamak | Düzenleme modunda satırdaki ▲ ▼ okları |
+| Sıralamak | Düzenleme modunda ☰ tutamacından sürükleyin |
+| Klasöre taşımak (tek link) | Düzenleme modunda ☰ tutamacından sürükleyip klasörün üstüne bırakın |
 | Adını değiştirmek | Düzenleme modunda satırdaki kalem simgesi |
 | Silmek | Düzenleme modunda satırdaki çöp kutusu (onay sorar) |
 | Birden fazla seçmek | Bir linke uzun basın, diğerlerine dokunun |
