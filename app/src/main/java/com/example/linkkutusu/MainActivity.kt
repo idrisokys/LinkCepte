@@ -74,7 +74,9 @@ fun App(resume: Int = 0) {
     var root by remember { mutableStateOf(Store.root(ctx)) }
     var stack by remember { mutableStateOf(listOf<Entry>()) }
     var tick by remember { mutableIntStateOf(0) }
-    var selected by remember { mutableStateOf(setOf<String>()) }
+    var editMode by remember { mutableStateOf(false) }          // üstteki düzenle tuşu
+    var selected by remember { mutableStateOf(setOf<String>()) } // düzenleme modunda işaretlenen öğeler
+    var moving by remember { mutableStateOf<List<Entry>>(emptyList()) }   // taşınacak öğeler
     var dialog by remember { mutableStateOf<String?>(null) }
     var renaming by remember { mutableStateOf<Entry?>(null) }
     var renameText by remember { mutableStateOf("") }
@@ -97,7 +99,7 @@ fun App(resume: Int = 0) {
 
     val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
         if (uri != null) {
-            if (Store.setRoot(ctx, uri)) { root = Store.root(ctx); stack = emptyList(); selected = emptySet(); tick++ }
+            if (Store.setRoot(ctx, uri)) { root = Store.root(ctx); stack = emptyList(); tick++ }
             else toast("Bu klasöre yazılamıyor, başka bir klasör seçin")
         }
     }
@@ -118,12 +120,11 @@ fun App(resume: Int = 0) {
     var loaded by remember(current) { mutableStateOf<List<Entry>?>(null) }
     LaunchedEffect(current, tick, resume) { loaded = withContext(Dispatchers.IO) { Store.list(ctx, current) } }
     val list = loaded ?: emptyList()
-    val selecting = selected.isNotEmpty()
-    val rn = renaming?.takeIf { selected.size == 1 && it.key in selected }   // geçerli ad değiştirme
-    BackHandler(selecting || searchQuery != null || stack.isNotEmpty()) {
+    val rn = renaming   // geçerli ad değiştirme
+    BackHandler(rn != null || searchQuery != null || editMode || stack.isNotEmpty()) {
         when {
             rn != null -> renaming = null
-            selecting -> selected = emptySet()
+            editMode -> { editMode = false; selected = emptySet() }
             searchQuery != null -> { searchJob?.cancel(); searchQuery = null; hits = null }
             else -> stack = stack.dropLast(1)
         }
@@ -226,7 +227,6 @@ fun App(resume: Int = 0) {
         val q = linkText.trim()
         if (q.isEmpty()) return
         focus.clearFocus()
-        selected = emptySet()
         searchJob?.cancel()
         searchQuery = q; hits = null
         searchJob = scope.launch {
@@ -248,7 +248,7 @@ fun App(resume: Int = 0) {
         val r = rn ?: return
         val n = renameText
         if (n.isBlank()) return
-        renaming = null; selected = emptySet()
+        renaming = null
         focus.clearFocus()
         scope.launch {
             val ok = lock.withLock { withContext(Dispatchers.IO) { Store.rename(ctx, current, r, n) } }
@@ -257,7 +257,6 @@ fun App(resume: Int = 0) {
         }
     }
     LaunchedEffect(rn?.key) { if (rn != null) { delay(100); runCatching { renameFocus.requestFocus() } } }
-    fun toggle(e: Entry) { selected = if (e.key in selected) selected - e.key else selected + e.key }
 
     Scaffold(bottomBar = {
         if (rn != null) Surface(tonalElevation = 3.dp) {
@@ -275,7 +274,7 @@ fun App(resume: Int = 0) {
                     Button({ saveRename() }, enabled = renameText.isNotBlank()) { Text("Kaydet") }
                 }
             }
-        } else if (!selecting) Surface(tonalElevation = 3.dp) {
+        } else Surface(tonalElevation = 3.dp) {
             Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 8.dp, vertical = 6.dp)) {
                 OutlinedTextField(
                     linkText, { linkText = it },
@@ -303,23 +302,26 @@ fun App(resume: Int = 0) {
                 Text("“$searchQuery”" + (hits?.let { " · ${it.size} sonuç" } ?: ""), maxLines = 1, overflow = TextOverflow.Ellipsis)
             },
             navigationIcon = { IconButton({ exitSearch(true) }) { Icon(Icons.Default.ArrowBack, "Aramadan çık") } })
-        else if (selecting) TopAppBar(
-            title = { Text("${selected.size} seçili") },
-            navigationIcon = { IconButton({ renaming = null; selected = emptySet() }) { Icon(Icons.Default.Close, "İptal") } },
-            actions = {
-                if (selected.size > 1) {
-                    IconButton({ dialog = "move" }) { Icon(Icons.Default.DriveFileMove, "Taşı") }
-                    IconButton({ deleteNow(list.filter { it.key in selected }) }) { Icon(Icons.Default.Delete, "Sil") }
-                }
-            })
         else TopAppBar(
-            title = { Text(if (stack.isEmpty()) "Link Cepte" else stack.last().name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+            title = {
+                Text(
+                    if (editMode && selected.isNotEmpty()) "${selected.size} seçili" else if (stack.isEmpty()) "Link Cepte" else stack.last().name,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+            },
             navigationIcon = { if (stack.isNotEmpty()) IconButton({ stack = stack.dropLast(1) }) { Icon(Icons.Default.ArrowBack, "Geri") } },
             actions = {
+                if (editMode && selected.isNotEmpty()) {
+                    IconButton({ moving = list.filter { it.key in selected }; dialog = "move" }) { Icon(Icons.Default.DriveFileMove, "Taşı") }
+                    IconButton({ deleteNow(list.filter { it.key in selected }) }) { Icon(Icons.Default.Delete, "Sil") }
+                }
                 IconButton({ dialog = "folder" }) { Icon(Icons.Default.CreateNewFolder, "Klasör") }
                 IconButton({ menu = true }) { Icon(Icons.Default.MoreVert, "Menü") }
                 DropdownMenu(menu, { menu = false }) {
                     DropdownMenuItem({ Text("Klasörü değiştir") }, { menu = false; pickFolder.launch(null) })
+                }
+                // En sağdaki düzenle tuşu: satırlarda ad değiştirme, taşıma, silme ve sıralama tutamacını açar/kapatır
+                IconButton({ editMode = !editMode; selected = emptySet() }) {
+                    Icon(if (editMode) Icons.Default.Done else Icons.Default.Edit, if (editMode) "Düzenlemeyi bitir" else "Düzenle")
                 }
             })
     }) { pad ->
@@ -331,8 +333,8 @@ fun App(resume: Int = 0) {
         }
         LazyColumn(Modifier.padding(pad).fillMaxSize(), state = listState) {
             items(list, key = { it.key }) { e ->
-                val sel = e.key in selected
                 val dragging = e.key == dragKey
+                val sel = e.key in selected
                 Column(
                     Modifier
                         .then(if (dragging) Modifier else Modifier.animateItemPlacement())
@@ -345,30 +347,21 @@ fun App(resume: Int = 0) {
                         }
                 ) {
                     ListItem(
-                        modifier = Modifier.combinedClickable(
-                            onClick = {
-                                when {
-                                    selecting -> toggle(e)
-                                    e.isDir -> stack = stack + e
-                                    else -> open(e)
-                                }
-                            },
-                            onLongClick = { toggle(e) }),
+                        modifier = Modifier.clickable {
+                            when {
+                                editMode -> selected = if (sel) selected - e.key else selected + e.key
+                                e.isDir -> stack = stack + e
+                                else -> open(e)
+                            }
+                        },
                         colors = ListItemDefaults.colors(containerColor = when {
                             dragging -> MaterialTheme.colorScheme.surfaceVariant
                             sel -> MaterialTheme.colorScheme.secondaryContainer
                             else -> MaterialTheme.colorScheme.surface
                         }),
                         leadingContent = {
-                            if (selecting) Checkbox(sel, null)
-                            else Icon(if (e.isDir) Icons.Default.Folder else if (e.isTxt) Icons.Default.Description else Icons.Default.Link, null)
-                        },
-                        headlineContent = { Text(e.title, maxLines = 4, overflow = TextOverflow.Ellipsis) },
-                        trailingContent = {
-                            if (sel && selected.size == 1) Row(verticalAlignment = Alignment.CenterVertically) {
-                                IconButton({ startRename(e) }, Modifier.size(40.dp)) { Icon(Icons.Default.Edit, "Adı değiştir") }
-                                IconButton({ dialog = "move" }, Modifier.size(40.dp)) { Icon(Icons.Default.DriveFileMove, "Taşı") }
-                                IconButton({ deleteNow(listOf(e)) }, Modifier.size(40.dp)) { Icon(Icons.Default.Delete, "Sil") }
+                            if (editMode) Row(verticalAlignment = Alignment.CenterVertically) {
+                                Checkbox(sel, { selected = if (sel) selected - e.key else selected + e.key })
                                 Icon(
                                     Icons.Default.DragHandle, "Sürükle",
                                     Modifier.size(48.dp).padding(12.dp).pointerInput(e.key) {
@@ -379,6 +372,11 @@ fun App(resume: Int = 0) {
                                             onDragCancel = { dragEnd(true) })
                                     })
                             }
+                            else Icon(if (e.isDir) Icons.Default.Folder else if (e.isTxt) Icons.Default.Description else Icons.Default.Link, null)
+                        },
+                        headlineContent = { Text(e.title, maxLines = 4, overflow = TextOverflow.Ellipsis) },
+                        trailingContent = {
+                            if (editMode) IconButton({ startRename(e) }, Modifier.size(40.dp)) { Icon(Icons.Default.Edit, "Adı değiştir") }
                         })
                     HorizontalDivider()
                 }
@@ -406,11 +404,11 @@ fun App(resume: Int = 0) {
     }
 
     if (dialog == "move") {
-        val files = list.filter { it.key in selected }
+        val files = moving
         val exclude = files.filter { it.isDir }.map { it.uri }.toSet()   // klasör kendi içine taşınamaz
         MoveDialog(ctx, rootUri, current, exclude, { dialog = null }) { target ->
             val from = current
-            dialog = null; selected = emptySet()
+            dialog = null; moving = emptyList(); selected = emptySet()
             scope.launch {
                 val ok = lock.withLock { withContext(Dispatchers.IO) { files.count { Store.moveEntry(ctx, it, from, target) } } }
                 tick++
