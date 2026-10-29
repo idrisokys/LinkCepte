@@ -106,6 +106,20 @@ object Store {
         try { DC.createDocument(ctx.contentResolver, dir, DC.Document.MIME_TYPE_DIR, clean(name)) } catch (e: Exception) { }
     }
 
+    /** Link (.url) veya klasör adını değiştirir; sıralamayı korur. */
+    fun rename(ctx: Context, dir: Uri, e: Entry, title: String): Boolean {
+        try {
+            val base = clean(title)
+            val newName = if (e.isDir) base else "$base.url"
+            if (newName == e.name) return true
+            if (children(ctx, dir).any { it.name.equals(newName, true) && it.uri != e.uri }) return false
+            val order = list(ctx, dir).map { it.name }
+            DC.renameDocument(ctx.contentResolver, e.uri, newName) ?: return false
+            saveOrder(ctx, dir, order.map { if (it == e.name) newName else it })
+            return true
+        } catch (ex: Exception) { return false }
+    }
+
     fun delete(ctx: Context, uri: Uri) {
         try { DC.deleteDocument(ctx.contentResolver, uri) } catch (e: Exception) { }
     }

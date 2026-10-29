@@ -55,6 +55,7 @@ fun App(resume: Int = 0) {
     var selected by remember { mutableStateOf(setOf<String>()) }
     var dialog by remember { mutableStateOf<String?>(null) }
     var toDelete by remember { mutableStateOf<List<Entry>?>(null) }
+    var renaming by remember { mutableStateOf<Entry?>(null) }
     var menu by remember { mutableStateOf(false) }
 
     fun toast(s: String) = Toast.makeText(ctx, s, Toast.LENGTH_SHORT).show()
@@ -150,14 +151,34 @@ fun App(resume: Int = 0) {
                     headlineContent = { Text(e.name.removeSuffix(".url"), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     trailingContent = {
                         if (!selecting) Row {
-                            IconButton({ swap(i, -1) }, enabled = i > 0) { Icon(Icons.Default.KeyboardArrowUp, "Yukarı") }
-                            IconButton({ swap(i, 1) }, enabled = i < list.size - 1) { Icon(Icons.Default.KeyboardArrowDown, "Aşağı") }
-                            IconButton({ toDelete = listOf(e) }) { Icon(Icons.Default.Delete, "Sil") }
+                            IconButton({ renaming = e }, Modifier.size(40.dp)) { Icon(Icons.Default.Edit, "Adı değiştir") }
+                            IconButton({ swap(i, -1) }, Modifier.size(40.dp), enabled = i > 0) { Icon(Icons.Default.KeyboardArrowUp, "Yukarı") }
+                            IconButton({ swap(i, 1) }, Modifier.size(40.dp), enabled = i < list.size - 1) { Icon(Icons.Default.KeyboardArrowDown, "Aşağı") }
+                            IconButton({ toDelete = listOf(e) }, Modifier.size(40.dp)) { Icon(Icons.Default.Delete, "Sil") }
                         }
                     })
                 HorizontalDivider()
             }
         }
+    }
+
+    renaming?.let { r ->
+        var t by remember(r) { mutableStateOf(r.name.removeSuffix(".url")) }
+        AlertDialog(
+            onDismissRequest = { renaming = null },
+            title = { Text("Adı değiştir") },
+            text = { OutlinedTextField(t, { t = it }, singleLine = true) },
+            confirmButton = {
+                TextButton({
+                    val n = t; renaming = null
+                    scope.launch {
+                        val ok = lock.withLock { withContext(Dispatchers.IO) { Store.rename(ctx, current, r, n) } }
+                        tick++
+                        if (!ok) toast("Ad değiştirilemedi (aynı adda öğe olabilir)")
+                    }
+                }, enabled = t.isNotBlank()) { Text("Kaydet") }
+            },
+            dismissButton = { TextButton({ renaming = null }) { Text("İptal") } })
     }
 
     toDelete?.let { del ->
