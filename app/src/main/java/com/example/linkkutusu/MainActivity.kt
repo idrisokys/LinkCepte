@@ -78,6 +78,7 @@ fun App(resume: Int = 0) {
     val renameFocus = remember { FocusRequester() }
     var menu by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf<String?>(null) }
+    var noteUrl by remember { mutableStateOf<String?>(null) }
     var linkText by remember { mutableStateOf("") }
     var searchQuery by remember { mutableStateOf<String?>(null) }   // null = normal liste
     var hits by remember { mutableStateOf<List<Hit>?>(null) }       // null = aranıyor
@@ -203,12 +204,12 @@ fun App(resume: Int = 0) {
     }
     fun open(e: Entry) {
         scope.launch {
-            val u = withContext(Dispatchers.IO) { Store.readUrl(ctx, e.uri) }
-            if (u == null) {
-                val t = withContext(Dispatchers.IO) { Store.readText(ctx, e.uri) }
-                if (t != null) note = t else toast("Link okunamadı")
+            val (u, t) = withContext(Dispatchers.IO) { Store.readUrl(ctx, e.uri) to Store.readText(ctx, e.uri) }
+            when {
+                t != null -> { noteUrl = u; note = t }   // metin (varsa kaynak linkiyle) pencerede gösterilir
+                u != null -> try { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u))) } catch (ex: Exception) { toast("Link açılamadı") }
+                else -> toast("Link okunamadı")
             }
-            else try { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u))) } catch (ex: Exception) { toast("Link açılamadı") }
         }
     }
     fun addFromText() {
@@ -386,9 +387,18 @@ fun App(resume: Int = 0) {
 
     note?.let { t ->
         AlertDialog(
-            onDismissRequest = { note = null },
+            onDismissRequest = { note = null; noteUrl = null },
             text = { Text(t, modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) },
-            confirmButton = { TextButton({ note = null }) { Text("Kapat") } },
+            confirmButton = {
+                Row {
+                    noteUrl?.let { u ->
+                        TextButton({
+                            try { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u))) } catch (ex: Exception) { toast("Link açılamadı") }
+                        }) { Text("Siteyi aç") }
+                    }
+                    TextButton({ note = null; noteUrl = null }) { Text("Kapat") }
+                }
+            },
             dismissButton = { TextButton({ clipboard.setText(AnnotatedString(t)); toast("Kopyalandı") }) { Text("Kopyala") } })
     }
 

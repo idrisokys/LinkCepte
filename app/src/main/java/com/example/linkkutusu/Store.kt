@@ -129,8 +129,15 @@ object Store {
     fun addNote(ctx: Context, dir: Uri, text: String): Boolean {
         // Ad, ilk satırla sınırlı kalmasın: tüm satırlar tek satırda birleştirilir (dosya adı sınırına kadar).
         val title = text.replace(Regex("\\s+"), " ").trim().ifBlank { "not" }
-        val enc = text.replace("\\", "\\\\").replace("\r", "").replace("\n", "\\n")
-        return write(ctx, dir, title, "[InternetShortcut]\r\nTEXT=$enc\r\n".toByteArray(), 250)
+        return write(ctx, dir, title, "[InternetShortcut]\r\nTEXT=${esc(text)}\r\n".toByteArray(), 250)
+    }
+
+    private fun esc(text: String) = text.replace("\\", "\\\\").replace("\r", "").replace("\n", "\\n")
+
+    /** Seçilen metin + kaynak sayfa linki: metin ad ve TEXT= olarak, link URL= olarak saklanır. */
+    fun addTextLink(ctx: Context, dir: Uri, text: String, url: String): Boolean {
+        val title = text.replace(Regex("\\s+"), " ").trim().ifBlank { "link" }
+        return write(ctx, dir, title, "[InternetShortcut]\r\nURL=$url\r\nTEXT=${esc(text)}\r\n".toByteArray(), 250)
     }
 
     /** Metindeki ilk linki bulur; sondaki noktalama işaretlerini atar. */
@@ -149,6 +156,11 @@ object Store {
         val t = text.trim()
         if (t.isEmpty()) return false
         val url = extractUrl(t) ?: return addNote(ctx, dir, t)
+        // Chrome'da seçili metin paylaşılınca "metin + link#:~:text=..." gelir: metni atma, sakla.
+        if (url.contains(":~:text=")) {
+            val quoted = t.replace(url, "").trim().trim('"', '“', '”', '„', '«', '»', '\'').trim()
+            if (quoted.isNotEmpty()) return addTextLink(ctx, dir, quoted, url)
+        }
         val title = fetchTitle(url)
             ?: subject?.lines()?.firstOrNull { it.isNotBlank() }?.trim()
             ?: t.replace(url, "").lines().firstOrNull { it.isNotBlank() }?.trim()
@@ -276,11 +288,10 @@ object Store {
                 val text = ls.firstOrNull { it.startsWith("TEXT=", true) }?.let { unescape(it.substring(5)) } ?: ""
                 val title = e.name.removeSuffix(".url")
                 val ft = fold(title)
-                val body = url ?: text
-                val fb = fold(body)
-                val all = ft + "\n" + fb
+                val fb = fold(text)
+                val all = ft + "\n" + fold(url ?: "") + "\n" + fb
                 if (!terms.all { all.contains(it) }) continue
-                val detail = if (url != null) url else {
+                val detail = if (url != null && text.isBlank()) url else {
                     val i = terms.map { fb.indexOf(it) }.filter { it >= 0 }.minOrNull() ?: 0
                     val st = maxOf(0, i - 30)
                     (if (st > 0) "…" else "") + text.substring(st, minOf(text.length, st + 120)).replace(Regex("\\s+"), " ")
