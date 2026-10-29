@@ -48,19 +48,31 @@ object Store {
         return root(ctx) != null
     }
 
+    private val WS = Regex("\\s+")
+    private val CTRL = Regex("[\\r\\n\\t]+")
+    private val SEPS = Regex("\\s*[:|/\\\\]\\s*")
+    private val BAD = Regex("[*?\"<>]")
+    private val URL_RE = Regex("https?://\\S+", RegexOption.IGNORE_CASE)
+
     /** Dosya adında sorun çıkaran karakterleri düzgünce temizler. */
     private fun clean(s: String, max: Int = 80): String =
-        s.replace(Regex("[\\r\\n\\t]+"), " ")
-            .replace(Regex("\\s*[:|/\\\\]\\s*"), " - ")
-            .replace(Regex("[*?\"<>]"), "")
-            .replace(Regex("\\s+"), " ")
-            .trim().trimStart('.', ' ', '-').take(max).let { fitBytes(it) }.trim().ifBlank { "link" }
+        s.replace(CTRL, " ")
+            .replace(SEPS, " - ")
+            .replace(BAD, "")
+            .replace(WS, " ")
+            .trim().trimStart('.', ' ', '-').take(max).trimEnd { it.isHighSurrogate() }
+            .let { fitBytes(it) }.trim().ifBlank { "link" }
 
     /** Dosya sistemi adı ~255 bayt ile sınırlı; ".url" ve " (2)" payı bırakarak bayt cinsinden kısaltır. */
     private fun fitBytes(s: String, limit: Int = 240): String {
-        var t = s
-        while (t.toByteArray(Charsets.UTF_8).size > limit) t = t.dropLast(1)
-        return t
+        var bytes = 0; var i = 0
+        while (i < s.length) {
+            val cp = s.codePointAt(i)
+            val n = when { cp < 0x80 -> 1; cp < 0x800 -> 2; cp < 0x10000 -> 3; else -> 4 }
+            if (bytes + n > limit) break
+            bytes += n; i += Character.charCount(cp)
+        }
+        return s.substring(0, i)
     }
 
     /** Tek sorguyla klasörün tüm içeriği. */
@@ -132,14 +144,14 @@ object Store {
 
     /** Düz metni de kaydeder (URL olmayan kayıt). */
     fun addNote(ctx: Context, dir: Uri, text: String): Boolean {
-        val title = text.replace(Regex("\\s+"), " ").trim().ifBlank { "not" }
+        val title = text.replace(WS, " ").trim().ifBlank { "not" }
         val enc = text.replace("\\", "\\\\").replace("\r", "").replace("\n", "\\n")
         return write(ctx, dir, title, "[InternetShortcut]\r\nTEXT=$enc\r\n".toByteArray())
     }
 
     /** Metni, uzunluk sınırı olmadan düz .txt dosyası olarak kaydeder; ad metnin ilk 100 karakteridir. */
     fun addTextFile(ctx: Context, dir: Uri, text: String): Boolean {
-        val title = text.replace(Regex("\\s+"), " ").trim().ifBlank { "not" }
+        val title = text.replace(WS, " ").trim().ifBlank { "not" }
         return write(ctx, dir, title, text.toByteArray(Charsets.UTF_8), 100, ".txt")
     }
 
@@ -150,7 +162,7 @@ object Store {
 
     /** Metindeki ilk linki bulur; sondaki noktalama işaretlerini atar. */
     fun extractUrl(text: String): String? {
-        var u = Regex("https?://\\S+", RegexOption.IGNORE_CASE).find(text)?.value ?: return null
+        var u = URL_RE.find(text)?.value ?: return null
         while (u.isNotEmpty()) {
             val last = u.last()
             val strip = last in ".,;:!?\"'>]}" || (last == ')' && '(' !in u)
@@ -250,8 +262,17 @@ object Store {
         } ?: emptyList()
     } catch (e: Exception) { emptyList() }
 
-    fun readUrl(ctx: Context, uri: Uri): String? =
-        lines(ctx, uri).firstOrNull { it.startsWith("URL=", true) }?.substring(4)?.trim()?.ifBlank { null }
+    private fun urlOf(ls: List<String>): String? =
+        ls.firstOrNull { it.startsWith("URL=", true) }?.substring(4)?.trim()?.ifBlank { null }
+
+    private fun textOf(ls: List<String>): String? =
+        ls.firstOrNull { it.startsWith("TEXT=", true) }?.let { unescape(it.substring(5)) }
+
+    /** Dosyayı bir kez okuyup (link, metin) çiftini döndürür. */
+    fun readLink(ctx: Context, uri: Uri): Pair<String?, String?> {
+        val ls = lines(ctx, uri)
+        return urlOf(ls) to textOf(ls)
+    }
 
     private fun unescape(dec: String): String {
         val sb = StringBuilder(); var i = 0
@@ -263,15 +284,17 @@ object Store {
         return sb.toString()
     }
 
-    fun readText(ctx: Context, uri: Uri): String? =
-        lines(ctx, uri).firstOrNull { it.startsWith("TEXT=", true) }?.let { unescape(it.substring(5)) }
-
     /** Büyük/küçük harf, Türkçe i/ı/İ/I ve aksan (ş→s, ğ→g...) farkını yok sayar; uzunluğu korur. */
     fun fold(s: String): String {
         val sb = StringBuilder(s.length)
         for (c in s) sb.append(when {
             c.code < 128 -> c.lowercaseChar()
             c == 'İ' || c == 'ı' -> 'i'
+            c == 'ş' || c == 'Ş' -> 's'
+            c == 'ğ' || c == 'Ğ' -> 'g'
+            c == 'ü' || c == 'Ü' -> 'u'
+            c == 'ö' || c == 'Ö' -> 'o'
+            c == 'ç' || c == 'Ç' -> 'c'
             else -> java.text.Normalizer.normalize(c.toString(), java.text.Normalizer.Form.NFD).first().lowercaseChar()
         })
         return sb.toString()
@@ -279,7 +302,7 @@ object Store {
 
     /** Tüm klasörlerde; başlık, link adresi ve not metninde arar. Yazılan her kelime bulunmalıdır. Dosyalar paralel okunur. */
     fun search(ctx: Context, root: Uri, query: String, alive: () -> Boolean = { true }): List<Hit> {
-        val terms = fold(query).split(Regex("\\s+")).filter { it.isNotEmpty() }
+        val terms = fold(query).split(WS).filter { it.isNotEmpty() }
         if (terms.isEmpty()) return emptyList()
         val files = ArrayList<Pair<Entry, List<Entry>>>()
         fun walk(dir: Uri, path: List<Entry>) {
@@ -292,9 +315,8 @@ object Store {
 
         fun match(e: Entry, path: List<Entry>): Hit? {
             val ls = if (e.isTxt) emptyList() else lines(ctx, e.uri)
-            val url = ls.firstOrNull { it.startsWith("URL=", true) }?.substring(4)?.trim()?.ifBlank { null }
-            val text = if (e.isTxt) readPlain(ctx, e.uri) ?: ""
-                else ls.firstOrNull { it.startsWith("TEXT=", true) }?.let { unescape(it.substring(5)) } ?: ""
+            val url = urlOf(ls)
+            val text = if (e.isTxt) readPlain(ctx, e.uri) ?: "" else textOf(ls) ?: ""
             val ft = fold(e.title)
             val body = url ?: text
             val fb = fold(body)
@@ -303,7 +325,7 @@ object Store {
             val detail = if (url != null) url else {
                 val i = terms.map { fb.indexOf(it) }.filter { it >= 0 }.minOrNull() ?: 0
                 val st = maxOf(0, i - 30)
-                (if (st > 0) "…" else "") + text.substring(st, minOf(text.length, st + 120)).replace(Regex("\\s+"), " ")
+                (if (st > 0) "…" else "") + text.substring(st, minOf(text.length, st + 120)).replace(WS, " ")
             }
             return Hit(e, path, detail, url == null, terms.all { ft.contains(it) })
         }

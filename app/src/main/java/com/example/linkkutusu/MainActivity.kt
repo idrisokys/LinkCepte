@@ -121,11 +121,12 @@ fun App(resume: Int = 0) {
     LaunchedEffect(current, tick, resume) { loaded = withContext(Dispatchers.IO) { Store.list(ctx, current) } }
     val list = loaded ?: emptyList()
     val rn = renaming   // geçerli ad değiştirme
+    LaunchedEffect(current) { selected = emptySet() }   // klasör değişince işaretler temizlenir
     BackHandler(rn != null || searchQuery != null || editMode || stack.isNotEmpty()) {
         when {
             rn != null -> renaming = null
-            editMode -> { editMode = false; selected = emptySet() }
             searchQuery != null -> { searchJob?.cancel(); searchQuery = null; hits = null }
+            editMode -> { editMode = false; selected = emptySet() }
             else -> stack = stack.dropLast(1)
         }
     }
@@ -192,9 +193,8 @@ fun App(resume: Int = 0) {
                 if (t != null) note = t else toast("Dosya okunamadı")
                 return@launch
             }
-            val u = withContext(Dispatchers.IO) { Store.readUrl(ctx, e.uri) }
+            val (u, t) = withContext(Dispatchers.IO) { Store.readLink(ctx, e.uri) }
             if (u == null) {
-                val t = withContext(Dispatchers.IO) { Store.readText(ctx, e.uri) }
                 if (t != null) note = t else toast("Link okunamadı")
             }
             else try { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u))) } catch (ex: Exception) { toast("Link açılamadı") }
@@ -227,6 +227,7 @@ fun App(resume: Int = 0) {
         val q = linkText.trim()
         if (q.isEmpty()) return
         focus.clearFocus()
+        editMode = false; selected = emptySet()
         searchJob?.cancel()
         searchQuery = q; hits = null
         searchJob = scope.launch {
