@@ -8,6 +8,7 @@ Hesap yok, reklam yok. Linkleriniz yalnızca sizin seçtiğiniz klasörde durur.
 
 - **Kendi klasörünüz:** İlk açılışta linklerin saklanacağı klasörü seçersiniz. Seçim hatırlanır.
 - **Alttan hızlı ekleme:** Alttaki alana link veya düz metin yapıştırıp artı simgesine basın. Link eklenirken sayfanın başlığı otomatik alınır, metin ise not olarak kaydedilir (dokununca açılır, kopyalanabilir).
+- **Arama:** Alttaki alana bir veya birkaç kelime yazıp artının yanındaki 🔍 simgesine basın. Tüm klasörlerde link başlığı, link adresi ve not metni taranır; yazdığınız kelimelerin hepsi geçmelidir. Büyük/küçük harf, Türkçe i/ı ve aksan farkı yok sayılır ("sehir" → "Şehir"). Sonuca dokunursanız açılır, sağdaki klasör simgesi o klasöre götürür, sol üstteki ok aramadan çıkar.
 - **Tek dokunuşla kaydetme:** Herhangi bir tarayıcıda **Paylaş → Link Cepte**'yi seçin. Uygulama açılmaz, yalnızca "Link kaydedildi" yazısı görünür ve link ana listeye eklenir.
 - **Standart `.url` dosyaları:** Her link ayrı bir `.url` dosyasıdır, bilgisayarda da çalışır:
   ```
@@ -28,6 +29,7 @@ Hesap yok, reklam yok. Linkleriniz yalnızca sizin seçtiğiniz klasörde durur.
 | İşlem | Nasıl |
 |---|---|
 | Link eklemek | Alttaki alana yapıştırıp **+**, ya da tarayıcıda **Paylaş → Link Cepte** |
+| Aramak | Alttaki alana kelime yazıp **🔍** |
 | Linki açmak | Satıra dokunun |
 | Klasöre girmek | Klasör satırına dokunun, geri için sol üstteki ok |
 | Yeni klasör | Üstteki klasör+ simgesi |

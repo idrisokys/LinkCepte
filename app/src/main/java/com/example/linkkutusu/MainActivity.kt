@@ -38,7 +38,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -75,6 +77,9 @@ fun App(resume: Int = 0) {
     var note by remember { mutableStateOf<String?>(null) }
     var editMode by remember { mutableStateOf(false) }
     var linkText by remember { mutableStateOf("") }
+    var searchQuery by remember { mutableStateOf<String?>(null) }   // null = normal liste
+    var hits by remember { mutableStateOf<List<Hit>?>(null) }       // null = aranıyor
+    var searchJob by remember { mutableStateOf<Job?>(null) }
     val clipboard = LocalClipboardManager.current
     val focus = LocalFocusManager.current
 
@@ -107,8 +112,12 @@ fun App(resume: Int = 0) {
     LaunchedEffect(current, tick, resume) { loaded = withContext(Dispatchers.IO) { Store.list(ctx, current) } }
     val list = loaded ?: emptyList()
     val selecting = selected.isNotEmpty()
-    BackHandler(selecting || stack.isNotEmpty()) {
-        if (selecting) selected = emptySet() else stack = stack.dropLast(1)
+    BackHandler(selecting || searchQuery != null || stack.isNotEmpty()) {
+        when {
+            selecting -> selected = emptySet()
+            searchQuery != null -> { searchJob?.cancel(); searchQuery = null; hits = null }
+            else -> stack = stack.dropLast(1)
+        }
     }
 
     // ---- Sürükle-bırak: sıralama + klasöre taşıma ----
@@ -208,6 +217,23 @@ fun App(resume: Int = 0) {
             toast(if (ok) "Eklendi" else "Eklenemedi")
         }
     }
+    fun startSearch() {
+        val q = linkText.trim()
+        if (q.isEmpty()) return
+        focus.clearFocus()
+        selected = emptySet()
+        searchJob?.cancel()
+        searchQuery = q; hits = null
+        searchJob = scope.launch {
+            val r = withContext(Dispatchers.IO) { Store.search(ctx, rootUri, q) { isActive } }
+            hits = r
+        }
+    }
+    fun exitSearch(clearText: Boolean) {
+        searchJob?.cancel()
+        if (clearText && linkText.trim() == searchQuery) linkText = ""
+        searchQuery = null; hits = null
+    }
     fun toggle(e: Entry) { selected = if (e.key in selected) selected - e.key else selected + e.key }
 
     Scaffold(bottomBar = {
@@ -222,11 +248,17 @@ fun App(resume: Int = 0) {
                         IconButton({ clipboard.getText()?.text?.let { linkText = it } }) { Icon(Icons.Default.ContentPaste, "Yapıştır") }
                     },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default))
+                IconButton({ startSearch() }, enabled = linkText.isNotBlank()) { Icon(Icons.Default.Search, "Ara") }
                 IconButton({ addFromText() }, enabled = linkText.isNotBlank()) { Icon(Icons.Default.Add, "Ekle") }
             }
         }
     }, topBar = {
-        if (selecting) TopAppBar(
+        if (searchQuery != null) TopAppBar(
+            title = {
+                Text("“$searchQuery”" + (hits?.let { " · ${it.size} sonuç" } ?: ""), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            },
+            navigationIcon = { IconButton({ exitSearch(true) }) { Icon(Icons.Default.ArrowBack, "Aramadan çık") } })
+        else if (selecting) TopAppBar(
             title = { Text("${selected.size} seçili") },
             navigationIcon = { IconButton({ selected = emptySet() }) { Icon(Icons.Default.Close, "İptal") } },
             actions = {
@@ -248,6 +280,9 @@ fun App(resume: Int = 0) {
                 }
             })
     }) { pad ->
+        if (searchQuery != null) SearchResults(pad, hits, { open(it) }) { path ->
+            exitSearch(true); stack = path
+        } else {
         if (loaded != null && list.isEmpty()) Box(Modifier.padding(pad).fillMaxSize().padding(32.dp), Alignment.Center) {
             Text("Burada henüz bir şey yok. Alttaki alana link veya metin yapıştırın ya da tarayıcıda Paylaş → Link Cepte'yi seçin.")
         }
@@ -306,6 +341,7 @@ fun App(resume: Int = 0) {
                     HorizontalDivider()
                 }
             }
+        }
         }
     }
 
@@ -412,4 +448,26 @@ fun MoveDialog(ctx: android.content.Context, root: Uri, current: Uri, onDismiss:
         },
         confirmButton = { TextButton({ onPick(dir) }, enabled = dir != current) { Text("Buraya taşı") } },
         dismissButton = { TextButton(onDismiss) { Text("İptal") } })
+}
+
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SearchResults(pad: PaddingValues, hits: List<Hit>?, onOpen: (Entry) -> Unit, onGoto: (List<Entry>) -> Unit) {
+    when {
+        hits == null -> Box(Modifier.padding(pad).fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
+        hits.isEmpty() -> Box(Modifier.padding(pad).fillMaxSize().padding(32.dp), Alignment.Center) { Text("Sonuç bulunamadı.") }
+        else -> LazyColumn(Modifier.padding(pad).fillMaxSize()) {
+            items(hits, key = { it.entry.key }) { h ->
+                ListItem(
+                    modifier = Modifier.clickable { onOpen(h.entry) },
+                    overlineContent = { Text(if (h.path.isEmpty()) "Ana liste" else h.path.joinToString(" › ") { it.name }, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    leadingContent = { Icon(if (h.isNote) Icons.Default.Description else Icons.Default.Link, null) },
+                    headlineContent = { Text(h.entry.name.removeSuffix(".url"), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    supportingContent = { if (h.detail.isNotBlank()) Text(h.detail, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+                    trailingContent = { IconButton({ onGoto(h.path) }) { Icon(Icons.Default.FolderOpen, "Klasöre git") } })
+                HorizontalDivider()
+            }
+        }
+    }
 }

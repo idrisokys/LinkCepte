@@ -12,6 +12,9 @@ data class Entry(val name: String, val uri: Uri, val isDir: Boolean) {
     val key: String = uri.toString()
 }
 
+/** Arama sonucu: bulunan öğe, bulunduğu klasör zinciri ve gösterilecek özet. */
+data class Hit(val entry: Entry, val path: List<Entry>, val detail: String, val isNote: Boolean, val titleMatch: Boolean)
+
 object Store {
     private const val ORDER = ".order.txt"
     private const val OCTET = "application/octet-stream"
@@ -193,16 +196,59 @@ object Store {
     fun readUrl(ctx: Context, uri: Uri): String? =
         lines(ctx, uri).firstOrNull { it.startsWith("URL=", true) }?.substring(4)?.trim()?.ifBlank { null }
 
-    fun readText(ctx: Context, uri: Uri): String? =
-        lines(ctx, uri).firstOrNull { it.startsWith("TEXT=", true) }?.substring(5)?.let { dec ->
-            val sb = StringBuilder(); var i = 0
-            while (i < dec.length) {
-                val c = dec[i]
-                if (c == '\\' && i + 1 < dec.length) { sb.append(if (dec[i + 1] == 'n') '\n' else dec[i + 1]); i += 2 }
-                else { sb.append(c); i++ }
-            }
-            sb.toString()
+    private fun unescape(dec: String): String {
+        val sb = StringBuilder(); var i = 0
+        while (i < dec.length) {
+            val c = dec[i]
+            if (c == '\\' && i + 1 < dec.length) { sb.append(if (dec[i + 1] == 'n') '\n' else dec[i + 1]); i += 2 }
+            else { sb.append(c); i++ }
         }
+        return sb.toString()
+    }
+
+    fun readText(ctx: Context, uri: Uri): String? =
+        lines(ctx, uri).firstOrNull { it.startsWith("TEXT=", true) }?.let { unescape(it.substring(5)) }
+
+    /** Büyük/küçük harf, Türkçe i/ı/İ/I ve aksan (ş→s, ğ→g...) farkını yok sayar; uzunluğu korur. */
+    fun fold(s: String): String {
+        val sb = StringBuilder(s.length)
+        for (c in s) sb.append(when {
+            c.code < 128 -> c.lowercaseChar()
+            c == 'İ' || c == 'ı' -> 'i'
+            else -> java.text.Normalizer.normalize(c.toString(), java.text.Normalizer.Form.NFD).first().lowercaseChar()
+        })
+        return sb.toString()
+    }
+
+    /** Tüm klasörlerde; başlık, link adresi ve not metninde arar. Yazılan her kelime bulunmalıdır. */
+    fun search(ctx: Context, root: Uri, query: String, alive: () -> Boolean = { true }): List<Hit> {
+        val terms = fold(query).split(Regex("\\s+")).filter { it.isNotEmpty() }
+        if (terms.isEmpty()) return emptyList()
+        val out = ArrayList<Hit>()
+        fun walk(dir: Uri, path: List<Entry>) {
+            for (e in list(ctx, dir)) {
+                if (!alive() || out.size >= 500) return
+                if (e.isDir) { walk(e.uri, path + e); continue }
+                val ls = lines(ctx, e.uri)
+                val url = ls.firstOrNull { it.startsWith("URL=", true) }?.substring(4)?.trim()?.ifBlank { null }
+                val text = ls.firstOrNull { it.startsWith("TEXT=", true) }?.let { unescape(it.substring(5)) } ?: ""
+                val title = e.name.removeSuffix(".url")
+                val ft = fold(title)
+                val body = url ?: text
+                val fb = fold(body)
+                val all = ft + "\n" + fb
+                if (!terms.all { all.contains(it) }) continue
+                val detail = if (url != null) url else {
+                    val i = terms.map { fb.indexOf(it) }.filter { it >= 0 }.minOrNull() ?: 0
+                    val st = maxOf(0, i - 30)
+                    (if (st > 0) "…" else "") + text.substring(st, minOf(text.length, st + 120)).replace(Regex("\\s+"), " ")
+                }
+                out.add(Hit(e, path, detail, url == null, terms.all { ft.contains(it) }))
+            }
+        }
+        walk(root, emptyList())
+        return out.sortedBy { !it.titleMatch }   // başlıkta geçenler önce
+    }
 
     private val badTitles = listOf("just a moment", "access denied", "attention required", "403 forbidden",
         "robot check", "are you a robot", "verifying you are human", "bir dakika", "erişim engellendi")
