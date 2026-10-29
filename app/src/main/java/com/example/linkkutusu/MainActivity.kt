@@ -197,6 +197,9 @@ fun App(resume: Int = 0) {
 fun MoveDialog(ctx: android.content.Context, root: Uri, current: Uri, onDismiss: () -> Unit, onPick: (Uri) -> Unit) {
     var stack by remember { mutableStateOf(listOf<Entry>()) }
     val dir = stack.lastOrNull()?.uri ?: root
+    val scope = rememberCoroutineScope()
+    var creating by remember { mutableStateOf(false) }
+    var newName by remember { mutableStateOf("") }
     var folders by remember(dir) { mutableStateOf(emptyList<Entry>()) }
     LaunchedEffect(dir) { folders = withContext(Dispatchers.IO) { Store.list(ctx, dir).filter { it.isDir } } }
     AlertDialog(
@@ -207,6 +210,23 @@ fun MoveDialog(ctx: android.content.Context, root: Uri, current: Uri, onDismiss:
                 if (stack.isNotEmpty()) item {
                     ListItem(modifier = Modifier.clickable { stack = stack.dropLast(1) },
                         leadingContent = { Icon(Icons.Default.ArrowBack, null) }, headlineContent = { Text("Üst klasör") })
+                }
+                item {
+                    if (!creating) ListItem(modifier = Modifier.clickable { creating = true },
+                        leadingContent = { Icon(Icons.Default.CreateNewFolder, null) }, headlineContent = { Text("Yeni klasör oluştur") })
+                    else Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(newName, { newName = it }, label = { Text("Klasör adı") }, singleLine = true, modifier = Modifier.weight(1f))
+                        TextButton(enabled = newName.isNotBlank(), onClick = {
+                            val n = newName
+                            val before = folders.map { it.uri }.toSet()
+                            creating = false; newName = ""
+                            scope.launch {
+                                val all = withContext(Dispatchers.IO) { Store.addFolder(ctx, dir, n); Store.list(ctx, dir).filter { it.isDir } }
+                                folders = all
+                                all.firstOrNull { it.uri !in before }?.let { stack = stack + it }
+                            }
+                        }) { Text("Oluştur") }
+                    }
                 }
                 items(folders, key = { it.uri.toString() }) { f ->
                     ListItem(modifier = Modifier.clickable { stack = stack + f },
