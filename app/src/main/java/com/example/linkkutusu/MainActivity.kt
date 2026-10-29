@@ -32,15 +32,20 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
+    private val resumes = mutableIntStateOf(0)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { MaterialTheme(colorScheme = darkColorScheme()) { Surface(Modifier.fillMaxSize()) { App() } } }
+        setContent { MaterialTheme(colorScheme = darkColorScheme()) { Surface(Modifier.fillMaxSize()) { App(resumes.intValue) } } }
+    }
+    override fun onResume() {
+        super.onResume()
+        resumes.intValue++
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-fun App() {
+fun App(resume: Int = 0) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val lock = remember { Mutex() }
@@ -78,7 +83,7 @@ fun App() {
 
     val current = stack.lastOrNull()?.uri ?: rootUri
     var loaded by remember(current) { mutableStateOf<List<Entry>?>(null) }
-    LaunchedEffect(current, tick) { loaded = withContext(Dispatchers.IO) { Store.list(ctx, current) } }
+    LaunchedEffect(current, tick, resume) { loaded = withContext(Dispatchers.IO) { Store.list(ctx, current) } }
     val list = loaded ?: emptyList()
     val selecting = selected.isNotEmpty()
     BackHandler(selecting || stack.isNotEmpty()) {
@@ -113,6 +118,7 @@ fun App() {
             title = { Text(if (stack.isEmpty()) "Link Cepte" else stack.last().name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
             navigationIcon = { if (stack.isNotEmpty()) IconButton({ stack = stack.dropLast(1) }) { Icon(Icons.Default.ArrowBack, "Geri") } },
             actions = {
+                IconButton({ tick++ }) { Icon(Icons.Default.Refresh, "Yenile") }
                 IconButton({ dialog = "folder" }) { Icon(Icons.Default.CreateNewFolder, "Klasör") }
                 IconButton({ menu = true }) { Icon(Icons.Default.MoreVert, "Menü") }
                 DropdownMenu(menu, { menu = false }) {
