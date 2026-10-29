@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.foundation.text.KeyboardOptions
@@ -37,11 +38,13 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
+private val DarkScheme = darkColorScheme()
+
 class MainActivity : ComponentActivity() {
     private val resumes = mutableIntStateOf(0)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { MaterialTheme(colorScheme = darkColorScheme()) { Surface(Modifier.fillMaxSize()) { App(resumes.intValue) } } }
+        setContent { MaterialTheme(colorScheme = DarkScheme) { Surface(Modifier.fillMaxSize()) { App(resumes.intValue) } } }
     }
     override fun onResume() {
         super.onResume()
@@ -67,6 +70,7 @@ fun App(resume: Int = 0) {
     var editMode by remember { mutableStateOf(false) }
     var linkText by remember { mutableStateOf("") }
     val clipboard = LocalClipboardManager.current
+    val focus = LocalFocusManager.current
 
     fun toast(s: String) = Toast.makeText(ctx, s, Toast.LENGTH_SHORT).show()
     fun run(reload: Boolean = true, block: () -> Unit) {
@@ -121,23 +125,15 @@ fun App(resume: Int = 0) {
     fun addFromText() {
         val text = linkText.trim()
         if (text.isEmpty()) return
-        val url = Regex("https?://\\S+").find(text)?.value
         linkText = ""
+        focus.clearFocus()
         scope.launch {
-            val ok = withContext(Dispatchers.IO) {
-                if (url == null) lock.withLock { Store.addNote(ctx, current, text) }
-                else {
-                    val title = Store.fetchTitle(url)
-                        ?: text.replace(url, "").lines().firstOrNull { it.isNotBlank() }?.trim()
-                        ?: runCatching { java.net.URI(url).host }.getOrNull() ?: "link"
-                    lock.withLock { Store.addLink(ctx, current, title, url) }
-                }
-            }
+            val ok = withContext(Dispatchers.IO) { Store.addFromText(ctx, current, text) }
             tick++
             toast(if (ok) "Eklendi" else "Eklenemedi")
         }
     }
-    fun toggle(e: Entry) { val k = e.uri.toString(); selected = if (k in selected) selected - k else selected + k }
+    fun toggle(e: Entry) { selected = if (e.key in selected) selected - e.key else selected + e.key }
 
     Scaffold(bottomBar = {
         if (!selecting) Surface(tonalElevation = 3.dp) {
@@ -160,7 +156,7 @@ fun App(resume: Int = 0) {
             navigationIcon = { IconButton({ selected = emptySet() }) { Icon(Icons.Default.Close, "İptal") } },
             actions = {
                 IconButton({ dialog = "move" }) { Icon(Icons.Default.DriveFileMove, "Taşı") }
-                IconButton({ toDelete = list.filter { it.uri.toString() in selected } }) { Icon(Icons.Default.Delete, "Sil") }
+                IconButton({ toDelete = list.filter { it.key in selected } }) { Icon(Icons.Default.Delete, "Sil") }
             })
         else TopAppBar(
             title = { Text(if (stack.isEmpty()) "Link Cepte" else stack.last().name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
@@ -178,11 +174,11 @@ fun App(resume: Int = 0) {
             })
     }) { pad ->
         if (loaded != null && list.isEmpty()) Box(Modifier.padding(pad).fillMaxSize().padding(32.dp), Alignment.Center) {
-            Text("Burada link yok. Tarayıcıda Paylaş → Link Cepte ile ekleyin.")
+            Text("Burada henüz bir şey yok. Alttaki alana link veya metin yapıştırın ya da tarayıcıda Paylaş → Link Cepte'yi seçin.")
         }
         LazyColumn(Modifier.padding(pad).fillMaxSize()) {
-            itemsIndexed(list, key = { _, e -> e.uri.toString() }) { i, e ->
-                val sel = e.uri.toString() in selected
+            itemsIndexed(list, key = { _, e -> e.key }) { i, e ->
+                val sel = e.key in selected
                 ListItem(
                     modifier = Modifier.combinedClickable(
                         onClick = {
@@ -262,7 +258,7 @@ fun App(resume: Int = 0) {
     }
 
     if (dialog == "move") MoveDialog(ctx, rootUri, current, { dialog = null }) { target ->
-        val files = list.filter { it.uri.toString() in selected }
+        val files = list.filter { it.key in selected }
         dialog = null; selected = emptySet()
         scope.launch {
             val ok = lock.withLock { withContext(Dispatchers.IO) { files.count { Store.moveLink(ctx, it, target) } } }
@@ -307,7 +303,7 @@ fun MoveDialog(ctx: android.content.Context, root: Uri, current: Uri, onDismiss:
                         }) { Text("Oluştur") }
                     }
                 }
-                items(folders, key = { it.uri.toString() }) { f ->
+                items(folders, key = { it.key }) { f ->
                     ListItem(modifier = Modifier.clickable { stack = stack + f },
                         leadingContent = { Icon(Icons.Default.Folder, null) }, headlineContent = { Text(f.name, maxLines = 1, overflow = TextOverflow.Ellipsis) })
                 }

@@ -2,11 +2,12 @@
 
 Favori linklerinizi telefonunuzda **kendi seçtiğiniz bir klasörde**, standart `.url` dosyaları olarak saklayan, sade ve hafif bir Android uygulaması.
 
-Hesap yok, internet izni yok, reklam yok. Linkleriniz yalnızca sizin seçtiğiniz klasörde durur.
+Hesap yok, reklam yok. Linkleriniz yalnızca sizin seçtiğiniz klasörde durur. İnternet izni yalnızca eklenen sayfanın başlığını almak için kullanılır.
 
 ## Özellikler
 
 - **Kendi klasörünüz:** İlk açılışta linklerin saklanacağı klasörü seçersiniz. Seçim hatırlanır.
+- **Alttan hızlı ekleme:** Alttaki alana link veya düz metin yapıştırıp artı simgesine basın. Link eklenirken sayfanın başlığı otomatik alınır, metin ise not olarak kaydedilir (dokununca açılır, kopyalanabilir).
 - **Tek dokunuşla kaydetme:** Herhangi bir tarayıcıda **Paylaş → Link Cepte**'yi seçin. Uygulama açılmaz, yalnızca "Link kaydedildi" yazısı görünür ve link ana listeye eklenir.
 - **Standart `.url` dosyaları:** Her link ayrı bir `.url` dosyasıdır, bilgisayarda da çalışır:
   ```
@@ -14,6 +15,7 @@ Hesap yok, internet izni yok, reklam yok. Linkleriniz yalnızca sizin seçtiğin
   URL=https://ornek.com
   ```
 - **Klasörler:** Linkleri alt klasörlerde düzenleyin.
+- **Düzenleme modu:** Üstteki kalem simgesine basınca satırlarda ad değiştirme, sıralama ve silme butonları görünür. Tekrar basınca gizlenir.
 - **Sıralama:** Yukarı/aşağı oklarıyla istediğiniz sıraya getirin. Sıra, her klasördeki gizli `.order.txt` dosyasında tutulur.
 - **Ad değiştirme:** Kalem simgesiyle link veya klasör adını değiştirin.
 - **Taşıma:** Bir linke uzun basıp birden fazla link seçin, taşı simgesiyle başka bir klasöre aktarın. Taşırken **yeni klasör** da oluşturabilirsiniz.
@@ -24,13 +26,14 @@ Hesap yok, internet izni yok, reklam yok. Linkleriniz yalnızca sizin seçtiğin
 
 | İşlem | Nasıl |
 |---|---|
-| Link eklemek | Tarayıcıda **Paylaş → Link Cepte** |
+| Link eklemek | Alttaki alana yapıştırıp **+**, ya da tarayıcıda **Paylaş → Link Cepte** |
 | Linki açmak | Satıra dokunun |
 | Klasöre girmek | Klasör satırına dokunun, geri için sol üstteki ok |
 | Yeni klasör | Üstteki klasör+ simgesi |
-| Sıralamak | Satırdaki ▲ ▼ okları |
-| Adını değiştirmek | Satırdaki kalem simgesi |
-| Silmek | Satırdaki çöp kutusu (onay sorar) |
+| Düzenlemek | Üstteki kalem simgesine basın, butonlar görünür |
+| Sıralamak | Düzenleme modunda satırdaki ▲ ▼ okları |
+| Adını değiştirmek | Düzenleme modunda satırdaki kalem simgesi |
+| Silmek | Düzenleme modunda satırdaki çöp kutusu (onay sorar) |
 | Birden fazla seçmek | Bir linke uzun basın, diğerlerine dokunun |
 | Taşımak | Seçtikten sonra üstteki taşı simgesi → klasör seç → **Buraya taşı** |
 | Klasörü değiştirmek | Sağ üst ⋮ menüsü → **Klasörü değiştir** |
@@ -61,12 +64,12 @@ Bilgisayara Android Studio kurmanız gerekmez.
 
 - Kotlin + Jetpack Compose (Material 3), en düşük Android sürümü 7.0 (API 24)
 - Depolama: Android Storage Access Framework, uygulamaya özel depolama alanı veya geniş depolama izni gerekmez
-- İzinler: yok (internet izni de yok)
+- İzinler: yalnızca internet (sayfa başlığını almak için)
 - Klasör içeriği tek sorguyla okunur, tüm dosya işlemleri arka planda ve sıralı yapılır
 - Derleme: R8 ile kod ve kaynak küçültme açık, yalnızca Türkçe ve İngilizce kaynaklar pakete girer
 
 ## Sınırlamalar
 
 - Android'in kısıtladığı yerler (Download klasörünün kendisi, depolama kökü) seçilemez. Kendi açtığınız bir klasörü seçin.
-- Linkin sayfa başlığı, tarayıcının paylaştığı başlıktan alınır. Başlık gelmezse site adresi kullanılır.
+- Sayfa başlığı linkin kendisinden alınır (en fazla birkaç saniye beklenir). Alınamazsa paylaşılan başlık, o da yoksa site adresi kullanılır. Giriş isteyen veya bot koruması olan sitelerde başlık alınamayabilir.
 - Aynı adda ikinci bir link kaydedilirse adına (2) eklenir.
