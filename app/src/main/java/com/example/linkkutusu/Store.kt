@@ -106,11 +106,11 @@ object Store {
         saveOrderIn(ctx, dir, names, children(ctx, dir))
     }
 
-    private fun write(ctx: Context, dir: Uri, base: String, bytes: ByteArray): Boolean = synchronized(mutex) {
+    private fun write(ctx: Context, dir: Uri, base: String, bytes: ByteArray, max: Int = 80): Boolean = synchronized(mutex) {
         try {
             val all = children(ctx, dir)
             val taken = all.mapTo(HashSet()) { it.name.lowercase() }
-            val b = clean(base)
+            val b = clean(base, max)
             var name = "$b.url"; var i = 2
             while (name.lowercase() in taken) { name = "$b ($i).url"; i++ }
             val f = DC.createDocument(ctx.contentResolver, dir, OCTET, name) ?: return false
@@ -127,9 +127,10 @@ object Store {
 
     /** Düz metni de kaydeder (URL olmayan kayıt). */
     fun addNote(ctx: Context, dir: Uri, text: String): Boolean {
-        val title = text.lines().firstOrNull { it.isNotBlank() }?.trim() ?: "not"
+        // Ad, ilk satırla sınırlı kalmasın: tüm satırlar tek satırda birleştirilir (dosya adı sınırına kadar).
+        val title = text.replace(Regex("\\s+"), " ").trim().ifBlank { "not" }
         val enc = text.replace("\\", "\\\\").replace("\r", "").replace("\n", "\\n")
-        return write(ctx, dir, title, "[InternetShortcut]\r\nTEXT=$enc\r\n".toByteArray())
+        return write(ctx, dir, title, "[InternetShortcut]\r\nTEXT=$enc\r\n".toByteArray(), 250)
     }
 
     /** Metindeki ilk linki bulur; sondaki noktalama işaretlerini atar. */
@@ -159,7 +160,7 @@ object Store {
     fun moveLink(ctx: Context, e: Entry, target: Uri): Boolean = synchronized(mutex) {
         try {
             val bytes = ctx.contentResolver.openInputStream(e.uri)?.use { it.readBytes() } ?: return false
-            if (!write(ctx, target, e.name.removeSuffix(".url"), bytes)) return false
+            if (!write(ctx, target, e.name.removeSuffix(".url"), bytes, 250)) return false
             DC.deleteDocument(ctx.contentResolver, e.uri)
         } catch (ex: Exception) { false }
     }

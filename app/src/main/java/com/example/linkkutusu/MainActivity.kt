@@ -360,7 +360,7 @@ fun App(resume: Int = 0) {
                             if (selecting) Checkbox(sel, null)
                             else Icon(if (e.isDir) (if (hot) Icons.Default.FolderOpen else Icons.Default.Folder) else Icons.Default.Link, null)
                         },
-                        headlineContent = { Text(e.name.removeSuffix(".url"), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        headlineContent = { Text(e.name.removeSuffix(".url"), maxLines = 4, overflow = TextOverflow.Ellipsis) },
                         trailingContent = {
                             if (sel && selected.size == 1) Row(verticalAlignment = Alignment.CenterVertically) {
                                 IconButton({ startRename(e) }, Modifier.size(40.dp)) { Icon(Icons.Default.Edit, "Adı değiştir") }
@@ -475,7 +475,7 @@ fun SearchResults(pad: PaddingValues, hits: List<Hit>?, onOpen: (Entry) -> Unit,
                     modifier = Modifier.clickable { onOpen(h.entry) },
                     overlineContent = { Text(if (h.path.isEmpty()) "Ana liste" else h.path.joinToString(" › ") { it.name }, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     leadingContent = { Icon(if (h.isNote) Icons.Default.Description else Icons.Default.Link, null) },
-                    headlineContent = { Text(h.entry.name.removeSuffix(".url"), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    headlineContent = { Text(h.entry.name.removeSuffix(".url"), maxLines = 4, overflow = TextOverflow.Ellipsis) },
                     supportingContent = { if (h.detail.isNotBlank()) Text(h.detail, maxLines = 2, overflow = TextOverflow.Ellipsis) },
                     trailingContent = { IconButton({ onGoto(h.path) }) { Icon(Icons.Default.FolderOpen, "Klasöre git") } })
                 HorizontalDivider()
