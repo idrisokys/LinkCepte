@@ -157,6 +157,40 @@ object Store {
         } catch (ex: Exception) { false }
     }
 
+    /** Klasörü (içindekilerle birlikte) kopyalar. */
+    private fun copyTree(ctx: Context, src: Entry, targetDir: Uri, newName: String): Boolean {
+        val dst = DC.createDocument(ctx.contentResolver, targetDir, DC.Document.MIME_TYPE_DIR, newName) ?: return false
+        for (c in children(ctx, src.uri)) {
+            if (c.isDir) { if (!copyTree(ctx, c, dst, c.name)) return false; continue }
+            val bytes = ctx.contentResolver.openInputStream(c.uri)?.use { it.readBytes() } ?: return false
+            val f = DC.createDocument(ctx.contentResolver, dst, if (c.name == ORDER) "text/plain" else OCTET, c.name) ?: return false
+            ctx.contentResolver.openOutputStream(f, "w")?.use { it.write(bytes) } ?: return false
+        }
+        return true
+    }
+
+    /** Link ya da klasörü başka klasöre taşır. [from] öğenin şu an bulunduğu klasördür. */
+    fun moveEntry(ctx: Context, e: Entry, from: Uri, target: Uri): Boolean = synchronized(mutex) {
+        if (!e.isDir) return moveLink(ctx, e, target)
+        try {
+            val all = children(ctx, target)
+            val taken = all.mapTo(HashSet()) { it.name.lowercase() }
+            var name = e.name
+            var moved = false
+            if (name.lowercase() !in taken) {
+                moved = try { DC.moveDocument(ctx.contentResolver, e.uri, from, target) != null } catch (ex: Exception) { false }
+            }
+            if (!moved) {
+                var i = 2
+                while (name.lowercase() in taken) { name = "${e.name} ($i)"; i++ }
+                if (!copyTree(ctx, e, target, name)) return false
+                DC.deleteDocument(ctx.contentResolver, e.uri)
+            }
+            saveOrderIn(ctx, target, ordered(ctx, all).map { it.name } + name, children(ctx, target))
+            true
+        } catch (ex: Exception) { false }
+    }
+
     fun addFolder(ctx: Context, dir: Uri, name: String) = synchronized(mutex) {
         try {
             val all = children(ctx, dir)
