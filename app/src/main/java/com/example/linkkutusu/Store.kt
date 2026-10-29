@@ -277,34 +277,48 @@ object Store {
         return sb.toString()
     }
 
-    /** Tüm klasörlerde; başlık, link adresi ve not metninde arar. Yazılan her kelime bulunmalıdır. */
+    /** Tüm klasörlerde; başlık, link adresi ve not metninde arar. Yazılan her kelime bulunmalıdır. Dosyalar paralel okunur. */
     fun search(ctx: Context, root: Uri, query: String, alive: () -> Boolean = { true }): List<Hit> {
         val terms = fold(query).split(Regex("\\s+")).filter { it.isNotEmpty() }
         if (terms.isEmpty()) return emptyList()
-        val out = ArrayList<Hit>()
+        val files = ArrayList<Pair<Entry, List<Entry>>>()
         fun walk(dir: Uri, path: List<Entry>) {
             for (e in list(ctx, dir)) {
-                if (!alive() || out.size >= 500) return
-                if (e.isDir) { walk(e.uri, path + e); continue }
-                val ls = if (e.isTxt) emptyList() else lines(ctx, e.uri)
-                val url = ls.firstOrNull { it.startsWith("URL=", true) }?.substring(4)?.trim()?.ifBlank { null }
-                val text = if (e.isTxt) readPlain(ctx, e.uri) ?: ""
-                    else ls.firstOrNull { it.startsWith("TEXT=", true) }?.let { unescape(it.substring(5)) } ?: ""
-                val title = e.title
-                val ft = fold(title)
-                val body = url ?: text
-                val fb = fold(body)
-                val all = ft + "\n" + fb
-                if (!terms.all { all.contains(it) }) continue
-                val detail = if (url != null) url else {
-                    val i = terms.map { fb.indexOf(it) }.filter { it >= 0 }.minOrNull() ?: 0
-                    val st = maxOf(0, i - 30)
-                    (if (st > 0) "…" else "") + text.substring(st, minOf(text.length, st + 120)).replace(Regex("\\s+"), " ")
-                }
-                out.add(Hit(e, path, detail, url == null, terms.all { ft.contains(it) }))
+                if (!alive()) return
+                if (e.isDir) walk(e.uri, path + e) else files.add(e to path)
             }
         }
         walk(root, emptyList())
+
+        fun match(e: Entry, path: List<Entry>): Hit? {
+            val ls = if (e.isTxt) emptyList() else lines(ctx, e.uri)
+            val url = ls.firstOrNull { it.startsWith("URL=", true) }?.substring(4)?.trim()?.ifBlank { null }
+            val text = if (e.isTxt) readPlain(ctx, e.uri) ?: ""
+                else ls.firstOrNull { it.startsWith("TEXT=", true) }?.let { unescape(it.substring(5)) } ?: ""
+            val ft = fold(e.title)
+            val body = url ?: text
+            val fb = fold(body)
+            val all = ft + "\n" + fb
+            if (!terms.all { all.contains(it) }) return null
+            val detail = if (url != null) url else {
+                val i = terms.map { fb.indexOf(it) }.filter { it >= 0 }.minOrNull() ?: 0
+                val st = maxOf(0, i - 30)
+                (if (st > 0) "…" else "") + text.substring(st, minOf(text.length, st + 120)).replace(Regex("\\s+"), " ")
+            }
+            return Hit(e, path, detail, url == null, terms.all { ft.contains(it) })
+        }
+
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(6)
+        val out = ArrayList<Hit>()
+        try {
+            val futures = files.map { (e, path) ->
+                pool.submit(java.util.concurrent.Callable<Hit?> { if (alive()) match(e, path) else null })
+            }
+            for (f in futures) {
+                if (!alive() || out.size >= 500) break
+                try { f.get()?.let { out.add(it) } } catch (ex: Exception) { }
+            }
+        } finally { pool.shutdownNow() }
         return out.sortedBy { !it.titleMatch }   // başlıkta geçenler önce
     }
 
@@ -314,12 +328,14 @@ object Store {
     /** Sayfanın <title> değerini getirir; olmazsa null. Arka plan thread'inde çağrılmalı. */
     fun fetchTitle(url: String): String? {
         var target = if (url.startsWith("http://", true)) "https://" + url.substring(7) else url
+        val deadline = System.currentTimeMillis() + 7000
         repeat(5) {
+            if (System.currentTimeMillis() > deadline) return null
             var conn: HttpURLConnection? = null
             try {
                 val c = URL(target).openConnection() as HttpURLConnection
                 conn = c
-                c.connectTimeout = 4000; c.readTimeout = 4000; c.instanceFollowRedirects = false
+                c.connectTimeout = 3000; c.readTimeout = 3000; c.instanceFollowRedirects = false
                 c.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36")
                 c.setRequestProperty("Accept-Language", "tr,en;q=0.8")
                 val code = c.responseCode

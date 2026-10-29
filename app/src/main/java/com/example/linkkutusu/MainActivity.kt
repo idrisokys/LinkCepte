@@ -129,17 +129,16 @@ fun App(resume: Int = 0) {
         }
     }
 
-    // ---- Sürükle-bırak: sıralama + klasöre taşıma ----
+    // ---- Sürükle-bırak: yalnızca sıralama ----
     val listState = rememberLazyListState()
     val currentDir by rememberUpdatedState(current)
     var dragKey by remember { mutableStateOf<String?>(null) }   // sürüklenen satır
     var dragY by remember { mutableFloatStateOf(0f) }           // sürüklenen satırın merkezi (liste koordinatı)
-    var dropKey by remember { mutableStateOf<String?>(null) }   // üzerine bırakılacak klasör
     var startOrder by remember { mutableStateOf(listOf<String>()) }
 
     fun dragStart(key: String) {
         val it = listState.layoutInfo.visibleItemsInfo.firstOrNull { x -> x.key == key } ?: return
-        dragKey = key; dropKey = null
+        dragKey = key
         dragY = it.offset + it.size / 2f
         startOrder = loaded?.map { x -> x.key } ?: emptyList()
     }
@@ -152,38 +151,18 @@ fun App(resume: Int = 0) {
         val me = vis.firstOrNull { it.key == key } ?: return
         if (from < 0 || me.index != from) return            // yerleşim henüz güncellenmedi
         val y = dragY.toInt()
-        val over = vis.firstOrNull { it.key != key && y >= it.offset && y < it.offset + it.size }
-        if (over == null) { dropKey = null; return }
-        val target = l.getOrNull(over.index) ?: return
+        val over = vis.firstOrNull { it.key != key && y >= it.offset && y < it.offset + it.size } ?: return
         val frac = (y - over.offset).toFloat() / over.size
         val down = over.index > from
-        if (!l[from].isDir && target.isDir) {
-            // Link klasörün ortasındaysa: klasöre bırakma. Karşı kenara geçerse: klasörü atla.
-            if (frac in 0.2f..0.8f) { dropKey = target.key; return }
-            dropKey = null
-            if (!((down && frac > 0.8f) || (!down && frac < 0.2f))) return
-        } else {
-            dropKey = null
-            if (!(if (down) frac > 0.5f else frac < 0.5f)) return
-        }
+        if (!(if (down) frac > 0.5f else frac < 0.5f)) return
         val m = l.toMutableList(); m.add(over.index, m.removeAt(from)); loaded = m
     }
     fun dragEnd(cancel: Boolean) {
-        val key = dragKey ?: return
-        val drop = dropKey
-        dragKey = null; dropKey = null
+        if (dragKey == null) return
+        dragKey = null
         val l = loaded ?: return
         if (cancel) { tick++; return }
-        val e = l.firstOrNull { it.key == key } ?: return
-        val folder = drop?.let { d -> l.firstOrNull { it.key == d } }
-        if (folder != null) {
-            loaded = l.filter { it.key != key }
-            scope.launch {
-                val ok = lock.withLock { withContext(Dispatchers.IO) { Store.moveLink(ctx, e, folder.uri) } }
-                tick++
-                toast(if (ok) "“${e.title}” → ${folder.name}" else "Taşınamadı")
-            }
-        } else if (l.map { it.key } != startOrder) {
+        if (l.map { it.key } != startOrder) {
             val names = l.map { it.name }
             val dir = currentDir
             run(reload = false) { Store.saveOrder(ctx, dir, names) }
@@ -354,7 +333,6 @@ fun App(resume: Int = 0) {
             items(list, key = { it.key }) { e ->
                 val sel = e.key in selected
                 val dragging = e.key == dragKey
-                val hot = e.key == dropKey
                 Column(
                     Modifier
                         .then(if (dragging) Modifier else Modifier.animateItemPlacement())
@@ -377,14 +355,13 @@ fun App(resume: Int = 0) {
                             },
                             onLongClick = { toggle(e) }),
                         colors = ListItemDefaults.colors(containerColor = when {
-                            hot -> MaterialTheme.colorScheme.primaryContainer
                             dragging -> MaterialTheme.colorScheme.surfaceVariant
                             sel -> MaterialTheme.colorScheme.secondaryContainer
                             else -> MaterialTheme.colorScheme.surface
                         }),
                         leadingContent = {
                             if (selecting) Checkbox(sel, null)
-                            else Icon(if (e.isDir) (if (hot) Icons.Default.FolderOpen else Icons.Default.Folder) else if (e.isTxt) Icons.Default.Description else Icons.Default.Link, null)
+                            else Icon(if (e.isDir) Icons.Default.Folder else if (e.isTxt) Icons.Default.Description else Icons.Default.Link, null)
                         },
                         headlineContent = { Text(e.title, maxLines = 4, overflow = TextOverflow.Ellipsis) },
                         trailingContent = {
