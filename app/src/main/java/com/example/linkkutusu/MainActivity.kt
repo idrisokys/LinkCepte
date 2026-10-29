@@ -155,11 +155,11 @@ fun MoveDialog(ctx: android.content.Context, root: DocumentFile, current: Docume
         text = {
             LazyColumn(Modifier.heightIn(max = 320.dp)) {
                 if (stack.isNotEmpty()) item {
-                    ListItem(Modifier.combinedClickableSimple { stack = stack.dropLast(1) },
+                    ListItem(modifier = Modifier.combinedClickableSimple { stack = stack.dropLast(1) },
                         leadingContent = { Icon(Icons.Default.ArrowBack, null) }, headlineContent = { Text("Üst klasör") })
                 }
                 items(folders, key = { it.uri.toString() }) { f ->
-                    ListItem(Modifier.combinedClickableSimple { stack = stack + f },
+                    ListItem(modifier = Modifier.combinedClickableSimple { stack = stack + f },
                         leadingContent = { Icon(Icons.Default.Folder, null) }, headlineContent = { Text(f.name ?: "") })
                 }
             }
