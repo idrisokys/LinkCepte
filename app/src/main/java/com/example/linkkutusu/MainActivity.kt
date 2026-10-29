@@ -22,7 +22,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
@@ -57,6 +61,9 @@ fun App(resume: Int = 0) {
     var toDelete by remember { mutableStateOf<List<Entry>?>(null) }
     var renaming by remember { mutableStateOf<Entry?>(null) }
     var menu by remember { mutableStateOf(false) }
+    var editMode by remember { mutableStateOf(false) }
+    var linkText by remember { mutableStateOf("") }
+    val clipboard = LocalClipboardManager.current
 
     fun toast(s: String) = Toast.makeText(ctx, s, Toast.LENGTH_SHORT).show()
     fun run(reload: Boolean = true, block: () -> Unit) {
@@ -105,9 +112,38 @@ fun App(resume: Int = 0) {
             else try { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u))) } catch (ex: Exception) { toast("Link açılamadı") }
         }
     }
+    fun addFromText() {
+        val text = linkText.trim()
+        val url = Regex("https?://\\S+").find(text)?.value
+        if (url == null) { toast("Geçerli bir link bulunamadı"); return }
+        val title = text.replace(url, "").lines().firstOrNull { it.isNotBlank() }?.trim()
+            ?: runCatching { java.net.URI(url).host }.getOrNull() ?: "link"
+        linkText = ""
+        scope.launch {
+            val ok = lock.withLock { withContext(Dispatchers.IO) { Store.addLink(ctx, current, title, url) } }
+            tick++
+            toast(if (ok) "Link eklendi" else "Eklenemedi")
+        }
+    }
     fun toggle(e: Entry) { val k = e.uri.toString(); selected = if (k in selected) selected - k else selected + k }
 
-    Scaffold(topBar = {
+    Scaffold(bottomBar = {
+        if (!selecting) Surface(tonalElevation = 3.dp) {
+            Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    linkText, { linkText = it },
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text("Link yapıştır") },
+                    singleLine = true,
+                    trailingIcon = {
+                        IconButton({ clipboard.getText()?.text?.let { linkText = it } }) { Icon(Icons.Default.ContentPaste, "Yapıştır") }
+                    },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { if (linkText.isNotBlank()) addFromText() }))
+                IconButton({ addFromText() }, enabled = linkText.isNotBlank()) { Icon(Icons.Default.Add, "Ekle") }
+            }
+        }
+    }, topBar = {
         if (selecting) TopAppBar(
             title = { Text("${selected.size} seçili") },
             navigationIcon = { IconButton({ selected = emptySet() }) { Icon(Icons.Default.Close, "İptal") } },
@@ -120,6 +156,9 @@ fun App(resume: Int = 0) {
             navigationIcon = { if (stack.isNotEmpty()) IconButton({ stack = stack.dropLast(1) }) { Icon(Icons.Default.ArrowBack, "Geri") } },
             actions = {
                 IconButton({ tick++ }) { Icon(Icons.Default.Refresh, "Yenile") }
+                IconButton({ editMode = !editMode }) {
+                    Icon(Icons.Default.Edit, "Düzenle", tint = if (editMode) MaterialTheme.colorScheme.primary else LocalContentColor.current)
+                }
                 IconButton({ dialog = "folder" }) { Icon(Icons.Default.CreateNewFolder, "Klasör") }
                 IconButton({ menu = true }) { Icon(Icons.Default.MoreVert, "Menü") }
                 DropdownMenu(menu, { menu = false }) {
@@ -150,7 +189,7 @@ fun App(resume: Int = 0) {
                     },
                     headlineContent = { Text(e.name.removeSuffix(".url"), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     trailingContent = {
-                        if (!selecting) Row {
+                        if (!selecting && editMode) Row {
                             IconButton({ renaming = e }, Modifier.size(40.dp)) { Icon(Icons.Default.Edit, "Adı değiştir") }
                             IconButton({ swap(i, -1) }, Modifier.size(40.dp), enabled = i > 0) { Icon(Icons.Default.KeyboardArrowUp, "Yukarı") }
                             IconButton({ swap(i, 1) }, Modifier.size(40.dp), enabled = i < list.size - 1) { Icon(Icons.Default.KeyboardArrowDown, "Aşağı") }
