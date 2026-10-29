@@ -28,7 +28,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -78,7 +81,6 @@ fun App(resume: Int = 0) {
     val renameFocus = remember { FocusRequester() }
     var menu by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf<String?>(null) }
-    var noteUrl by remember { mutableStateOf<String?>(null) }
     var linkText by remember { mutableStateOf("") }
     var searchQuery by remember { mutableStateOf<String?>(null) }   // null = normal liste
     var hits by remember { mutableStateOf<List<Hit>?>(null) }       // null = aranıyor
@@ -86,7 +88,8 @@ fun App(resume: Int = 0) {
     val clipboard = LocalClipboardManager.current
     val focus = LocalFocusManager.current
 
-    val maxChars = 250
+    val maxChars = 220      // ad değiştirme sınırı
+    val addMax = 220        // alttaki ekleme alanı sınırı
     fun toast(s: String) = Toast.makeText(ctx, s, Toast.LENGTH_SHORT).show()
     fun run(reload: Boolean = true, block: () -> Unit) {
         scope.launch { lock.withLock { withContext(Dispatchers.IO) { block() } }; if (reload) tick++ }
@@ -178,7 +181,7 @@ fun App(resume: Int = 0) {
             scope.launch {
                 val ok = lock.withLock { withContext(Dispatchers.IO) { Store.moveLink(ctx, e, folder.uri) } }
                 tick++
-                toast(if (ok) "“${e.name.removeSuffix(".url")}” → ${folder.name}" else "Taşınamadı")
+                toast(if (ok) "“${e.title}” → ${folder.name}" else "Taşınamadı")
             }
         } else if (l.map { it.key } != startOrder) {
             val names = l.map { it.name }
@@ -204,17 +207,34 @@ fun App(resume: Int = 0) {
     }
     fun open(e: Entry) {
         scope.launch {
-            val (u, t) = withContext(Dispatchers.IO) { Store.readUrl(ctx, e.uri) to Store.readText(ctx, e.uri) }
-            when {
-                t != null -> { noteUrl = u; note = t }   // metin (varsa kaynak linkiyle) pencerede gösterilir
-                u != null -> try { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u))) } catch (ex: Exception) { toast("Link açılamadı") }
-                else -> toast("Link okunamadı")
+            if (e.isTxt) {
+                val t = withContext(Dispatchers.IO) { Store.readPlain(ctx, e.uri) }
+                if (t != null) note = t else toast("Dosya okunamadı")
+                return@launch
             }
+            val u = withContext(Dispatchers.IO) { Store.readUrl(ctx, e.uri) }
+            if (u == null) {
+                val t = withContext(Dispatchers.IO) { Store.readText(ctx, e.uri) }
+                if (t != null) note = t else toast("Link okunamadı")
+            }
+            else try { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u))) } catch (ex: Exception) { toast("Link açılamadı") }
+        }
+    }
+    fun addTxt() {
+        val text = linkText.trim()
+        if (text.isEmpty()) return
+        linkText = ""
+        focus.clearFocus()
+        scope.launch {
+            val ok = withContext(Dispatchers.IO) { Store.addTextFile(ctx, current, text) }
+            tick++
+            toast(if (ok) "Metin dosyası eklendi" else "Eklenemedi")
         }
     }
     fun addFromText() {
         val text = linkText.trim()
         if (text.isEmpty()) return
+        if (text.length > addMax) { toast("$addMax karakteri aşıyor. + simgesine uzun basarak .txt olarak kaydedin"); return }
         linkText = ""
         focus.clearFocus()
         scope.launch {
@@ -244,7 +264,7 @@ fun App(resume: Int = 0) {
         selected = emptySet()
         run { items.forEach { Store.delete(ctx, it.uri) } }
     }
-    fun startRename(e: Entry) { renameText = e.name.removeSuffix(".url"); renaming = e }
+    fun startRename(e: Entry) { renameText = e.title; renaming = e }
     fun saveRename() {
         val r = rn ?: return
         val n = renameText
@@ -281,15 +301,20 @@ fun App(resume: Int = 0) {
                 OutlinedTextField(
                     linkText, { linkText = it },
                     modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("Link veya metin yapıştır") },
+                    placeholder = { Text("Link veya metin yapıştır (+ uzun bas: .txt)") },
                     singleLine = false, minLines = 2, maxLines = 8,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton({ addFromText() }, enabled = linkText.isNotBlank()) { Icon(Icons.Default.Add, "Ekle") }
+                    val canAdd = linkText.isNotBlank()
+                    Box(
+                        Modifier.size(48.dp).clip(CircleShape)
+                            .combinedClickable(enabled = canAdd, onClick = { addFromText() }, onLongClick = { addTxt() }),
+                        contentAlignment = Alignment.Center
+                    ) { Icon(Icons.Default.Add, "Ekle (uzun bas: .txt)", tint = LocalContentColor.current.copy(alpha = if (canAdd) 1f else 0.38f)) }
                     IconButton({ startSearch() }, enabled = linkText.isNotBlank()) { Icon(Icons.Default.Search, "Ara") }
                     IconButton({ clipboard.getText()?.text?.let { linkText = it } }) { Icon(Icons.Default.ContentPaste, "Yapıştır") }
                     Spacer(Modifier.weight(1f))
-                    Text("${linkText.length}", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(end = 8.dp))
+                    Text("${linkText.length}/$addMax", style = MaterialTheme.typography.labelSmall, color = if (linkText.length > addMax) MaterialTheme.colorScheme.error else Color.Unspecified, modifier = Modifier.padding(end = 8.dp))
                 }
             }
         }
@@ -359,9 +384,9 @@ fun App(resume: Int = 0) {
                         }),
                         leadingContent = {
                             if (selecting) Checkbox(sel, null)
-                            else Icon(if (e.isDir) (if (hot) Icons.Default.FolderOpen else Icons.Default.Folder) else Icons.Default.Link, null)
+                            else Icon(if (e.isDir) (if (hot) Icons.Default.FolderOpen else Icons.Default.Folder) else if (e.isTxt) Icons.Default.Description else Icons.Default.Link, null)
                         },
-                        headlineContent = { Text(e.name.removeSuffix(".url"), maxLines = 4, overflow = TextOverflow.Ellipsis) },
+                        headlineContent = { Text(e.title, maxLines = 4, overflow = TextOverflow.Ellipsis) },
                         trailingContent = {
                             if (sel && selected.size == 1) Row(verticalAlignment = Alignment.CenterVertically) {
                                 IconButton({ startRename(e) }, Modifier.size(40.dp)) { Icon(Icons.Default.Edit, "Adı değiştir") }
@@ -387,18 +412,9 @@ fun App(resume: Int = 0) {
 
     note?.let { t ->
         AlertDialog(
-            onDismissRequest = { note = null; noteUrl = null },
+            onDismissRequest = { note = null },
             text = { Text(t, modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) },
-            confirmButton = {
-                Row {
-                    noteUrl?.let { u ->
-                        TextButton({
-                            try { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u))) } catch (ex: Exception) { toast("Link açılamadı") }
-                        }) { Text("Siteyi aç") }
-                    }
-                    TextButton({ note = null; noteUrl = null }) { Text("Kapat") }
-                }
-            },
+            confirmButton = { TextButton({ note = null }) { Text("Kapat") } },
             dismissButton = { TextButton({ clipboard.setText(AnnotatedString(t)); toast("Kopyalandı") }) { Text("Kopyala") } })
     }
 
@@ -484,8 +500,8 @@ fun SearchResults(pad: PaddingValues, hits: List<Hit>?, onOpen: (Entry) -> Unit,
                 ListItem(
                     modifier = Modifier.clickable { onOpen(h.entry) },
                     overlineContent = { Text(if (h.path.isEmpty()) "Ana liste" else h.path.joinToString(" › ") { it.name }, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    leadingContent = { Icon(if (h.isNote) Icons.Default.Description else Icons.Default.Link, null) },
-                    headlineContent = { Text(h.entry.name.removeSuffix(".url"), maxLines = 4, overflow = TextOverflow.Ellipsis) },
+                    leadingContent = { Icon(if (h.isNote || h.entry.isTxt) Icons.Default.Description else Icons.Default.Link, null) },
+                    headlineContent = { Text(h.entry.title, maxLines = 4, overflow = TextOverflow.Ellipsis) },
                     supportingContent = { if (h.detail.isNotBlank()) Text(h.detail, maxLines = 2, overflow = TextOverflow.Ellipsis) },
                     trailingContent = { IconButton({ onGoto(h.path) }) { Icon(Icons.Default.FolderOpen, "Klasöre git") } })
                 HorizontalDivider()

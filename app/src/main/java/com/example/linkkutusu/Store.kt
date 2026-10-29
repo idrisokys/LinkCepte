@@ -10,6 +10,11 @@ import java.net.URL
 data class Entry(val name: String, val uri: Uri, val isDir: Boolean) {
     /** Liste anahtarı; her seferinde yeniden hesaplanmasın diye bir kez üretilir. */
     val key: String = uri.toString()
+    /** Düz metin dosyası (.txt) mı? */
+    val isTxt: Boolean = !isDir && name.endsWith(".txt", true)
+    /** Listede gösterilen ad (uzantısız). */
+    val title: String = if (!isDir && (name.endsWith(".url", true) || isTxt)) name.dropLast(4) else name
+    val ext: String = if (isTxt) ".txt" else ".url"
 }
 
 /** Arama sonucu: bulunan öğe, bulunduğu klasör zinciri ve gösterilecek özet. */
@@ -77,7 +82,7 @@ object Store {
     }
 
     private fun ordered(ctx: Context, all: List<Entry>): List<Entry> {
-        val files = all.filter { !it.name.startsWith(".") && (it.isDir || it.name.endsWith(".url", true)) }
+        val files = all.filter { !it.name.startsWith(".") && (it.isDir || it.name.endsWith(".url", true) || it.name.endsWith(".txt", true)) }
         val byName = files.associateBy { it.name }
         val ord = readOrder(ctx, all).distinct().mapNotNull { byName[it] }
         val seen = ord.mapTo(HashSet()) { it.name }
@@ -106,14 +111,14 @@ object Store {
         saveOrderIn(ctx, dir, names, children(ctx, dir))
     }
 
-    private fun write(ctx: Context, dir: Uri, base: String, bytes: ByteArray, max: Int = 80): Boolean = synchronized(mutex) {
+    private fun write(ctx: Context, dir: Uri, base: String, bytes: ByteArray, max: Int = 220, ext: String = ".url"): Boolean = synchronized(mutex) {
         try {
             val all = children(ctx, dir)
             val taken = all.mapTo(HashSet()) { it.name.lowercase() }
             val b = clean(base, max)
-            var name = "$b.url"; var i = 2
-            while (name.lowercase() in taken) { name = "$b ($i).url"; i++ }
-            val f = DC.createDocument(ctx.contentResolver, dir, OCTET, name) ?: return false
+            var name = "$b$ext"; var i = 2
+            while (name.lowercase() in taken) { name = "$b ($i)$ext"; i++ }
+            val f = DC.createDocument(ctx.contentResolver, dir, if (ext == ".txt") "text/plain" else OCTET, name) ?: return false
             ctx.contentResolver.openOutputStream(f, "w")?.use { it.write(bytes) } ?: return false
             // Yeni öğe listenin sonuna eklenir; mevcut sıra korunur.
             val names = ordered(ctx, all).map { it.name } + name
@@ -127,18 +132,21 @@ object Store {
 
     /** Düz metni de kaydeder (URL olmayan kayıt). */
     fun addNote(ctx: Context, dir: Uri, text: String): Boolean {
-        // Ad: metnin ilk 100 karakteri (satırlar tek satırda birleştirilir). Metnin tamamı TEXT= içinde durur, uzunluk sınırı yok.
         val title = text.replace(Regex("\\s+"), " ").trim().ifBlank { "not" }
-        return write(ctx, dir, title, "[InternetShortcut]\r\nTEXT=${esc(text)}\r\n".toByteArray(), 100)
+        val enc = text.replace("\\", "\\\\").replace("\r", "").replace("\n", "\\n")
+        return write(ctx, dir, title, "[InternetShortcut]\r\nTEXT=$enc\r\n".toByteArray())
     }
 
-    private fun esc(text: String) = text.replace("\\", "\\\\").replace("\r", "").replace("\n", "\\n")
-
-    /** Seçilen metin + kaynak sayfa linki: metin ad ve TEXT= olarak, link URL= olarak saklanır. */
-    fun addTextLink(ctx: Context, dir: Uri, text: String, url: String): Boolean {
-        val title = text.replace(Regex("\\s+"), " ").trim().ifBlank { "link" }
-        return write(ctx, dir, title, "[InternetShortcut]\r\nURL=$url\r\nTEXT=${esc(text)}\r\n".toByteArray(), 100)
+    /** Metni, uzunluk sınırı olmadan düz .txt dosyası olarak kaydeder; ad metnin ilk 100 karakteridir. */
+    fun addTextFile(ctx: Context, dir: Uri, text: String): Boolean {
+        val title = text.replace(Regex("\\s+"), " ").trim().ifBlank { "not" }
+        return write(ctx, dir, title, text.toByteArray(Charsets.UTF_8), 100, ".txt")
     }
+
+    /** .txt dosyasının tamamını okur. */
+    fun readPlain(ctx: Context, uri: Uri): String? = try {
+        ctx.contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }?.removePrefix("\uFEFF")
+    } catch (e: Exception) { null }
 
     /** Metindeki ilk linki bulur; sondaki noktalama işaretlerini atar. */
     fun extractUrl(text: String): String? {
@@ -156,11 +164,6 @@ object Store {
         val t = text.trim()
         if (t.isEmpty()) return false
         val url = extractUrl(t) ?: return addNote(ctx, dir, t)
-        // Chrome'da seçili metin paylaşılınca "metin + link#:~:text=..." gelir: metni atma, sakla.
-        if (url.contains(":~:text=")) {
-            val quoted = t.replace(url, "").trim().trim('"', '“', '”', '„', '«', '»', '\'').trim()
-            if (quoted.isNotEmpty()) return addTextLink(ctx, dir, quoted, url)
-        }
         val title = fetchTitle(url)
             ?: subject?.lines()?.firstOrNull { it.isNotBlank() }?.trim()
             ?: t.replace(url, "").lines().firstOrNull { it.isNotBlank() }?.trim()
@@ -172,7 +175,7 @@ object Store {
     fun moveLink(ctx: Context, e: Entry, target: Uri): Boolean = synchronized(mutex) {
         try {
             val bytes = ctx.contentResolver.openInputStream(e.uri)?.use { it.readBytes() } ?: return false
-            if (!write(ctx, target, e.name.removeSuffix(".url"), bytes, 250)) return false
+            if (!write(ctx, target, e.title, bytes, 220, e.ext)) return false
             DC.deleteDocument(ctx.contentResolver, e.uri)
         } catch (ex: Exception) { false }
     }
@@ -225,8 +228,8 @@ object Store {
     /** Link (.url) veya klasör adını değiştirir; sıralamayı korur. */
     fun rename(ctx: Context, dir: Uri, e: Entry, title: String): Boolean = synchronized(mutex) {
         try {
-            val base = clean(title, 250)
-            val newName = if (e.isDir) base else "$base.url"
+            val base = clean(title, 220)
+            val newName = if (e.isDir) base else base + e.ext
             if (newName == e.name) return true
             val all = children(ctx, dir)
             if (all.any { it.name.equals(newName, true) && it.uri != e.uri }) return false
@@ -283,15 +286,17 @@ object Store {
             for (e in list(ctx, dir)) {
                 if (!alive() || out.size >= 500) return
                 if (e.isDir) { walk(e.uri, path + e); continue }
-                val ls = lines(ctx, e.uri)
+                val ls = if (e.isTxt) emptyList() else lines(ctx, e.uri)
                 val url = ls.firstOrNull { it.startsWith("URL=", true) }?.substring(4)?.trim()?.ifBlank { null }
-                val text = ls.firstOrNull { it.startsWith("TEXT=", true) }?.let { unescape(it.substring(5)) } ?: ""
-                val title = e.name.removeSuffix(".url")
+                val text = if (e.isTxt) readPlain(ctx, e.uri) ?: ""
+                    else ls.firstOrNull { it.startsWith("TEXT=", true) }?.let { unescape(it.substring(5)) } ?: ""
+                val title = e.title
                 val ft = fold(title)
-                val fb = fold(text)
-                val all = ft + "\n" + fold(url ?: "") + "\n" + fb
+                val body = url ?: text
+                val fb = fold(body)
+                val all = ft + "\n" + fb
                 if (!terms.all { all.contains(it) }) continue
-                val detail = if (url != null && text.isBlank()) url else {
+                val detail = if (url != null) url else {
                     val i = terms.map { fb.indexOf(it) }.filter { it >= 0 }.minOrNull() ?: 0
                     val st = maxOf(0, i - 30)
                     (if (st > 0) "…" else "") + text.substring(st, minOf(text.length, st + 120)).replace(Regex("\\s+"), " ")

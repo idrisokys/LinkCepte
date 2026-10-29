@@ -29,6 +29,7 @@ Hesap yok, reklam yok. Linkleriniz yalnızca sizin seçtiğiniz klasörde durur.
 | İşlem | Nasıl |
 |---|---|
 | Link eklemek | Alttaki alana yapıştırıp **+**, ya da tarayıcıda **Paylaş → Link Cepte** |
+| Uzun metni .txt kaydetmek (sınırsız) | Alttaki alana yapıştırıp **+** simgesine uzun basın |
 | Aramak | Alttaki alana kelime yazıp **🔍** |
 | Linki açmak | Satıra dokunun |
 | Klasöre girmek | Klasör satırına dokunun, geri için sol üstteki ok |
