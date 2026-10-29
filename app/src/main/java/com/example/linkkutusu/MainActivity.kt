@@ -26,6 +26,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -72,6 +74,8 @@ fun App(resume: Int = 0) {
     var selected by remember { mutableStateOf(setOf<String>()) }
     var dialog by remember { mutableStateOf<String?>(null) }
     var renaming by remember { mutableStateOf<Entry?>(null) }
+    var renameText by remember { mutableStateOf("") }
+    val renameFocus = remember { FocusRequester() }
     var menu by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf<String?>(null) }
     var linkText by remember { mutableStateOf("") }
@@ -111,8 +115,10 @@ fun App(resume: Int = 0) {
     LaunchedEffect(current, tick, resume) { loaded = withContext(Dispatchers.IO) { Store.list(ctx, current) } }
     val list = loaded ?: emptyList()
     val selecting = selected.isNotEmpty()
+    val rn = renaming?.takeIf { selected.size == 1 && it.key in selected }   // geçerli ad değiştirme
     BackHandler(selecting || searchQuery != null || stack.isNotEmpty()) {
         when {
+            rn != null -> renaming = null
             selecting -> selected = emptySet()
             searchQuery != null -> { searchJob?.cancel(); searchQuery = null; hits = null }
             else -> stack = stack.dropLast(1)
@@ -237,10 +243,39 @@ fun App(resume: Int = 0) {
         selected = emptySet()
         run { items.forEach { Store.delete(ctx, it.uri) } }
     }
+    fun startRename(e: Entry) { renameText = e.name.removeSuffix(".url"); renaming = e }
+    fun saveRename() {
+        val r = rn ?: return
+        val n = renameText
+        if (n.isBlank()) return
+        renaming = null; selected = emptySet()
+        focus.clearFocus()
+        scope.launch {
+            val ok = lock.withLock { withContext(Dispatchers.IO) { Store.rename(ctx, current, r, n) } }
+            tick++
+            if (!ok) toast("Ad değiştirilemedi (aynı adda öğe olabilir)")
+        }
+    }
+    LaunchedEffect(rn?.key) { if (rn != null) { delay(100); runCatching { renameFocus.requestFocus() } } }
     fun toggle(e: Entry) { selected = if (e.key in selected) selected - e.key else selected + e.key }
 
     Scaffold(bottomBar = {
-        if (!selecting) Surface(tonalElevation = 3.dp) {
+        if (rn != null) Surface(tonalElevation = 3.dp) {
+            Column(Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(horizontal = 8.dp, vertical = 6.dp)) {
+                OutlinedTextField(
+                    renameText, { renameText = it.take(80) },
+                    modifier = Modifier.fillMaxWidth().focusRequester(renameFocus),
+                    label = { Text(if (rn.isDir) "Klasör adı" else "Yeni ad") },
+                    singleLine = false, minLines = 1, maxLines = 4,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default))
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    TextButton({ renaming = null }) { Text("İptal") }
+                    Spacer(Modifier.weight(1f))
+                    Text("${renameText.length}/80", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(end = 8.dp))
+                    Button({ saveRename() }, enabled = renameText.isNotBlank()) { Text("Kaydet") }
+                }
+            }
+        } else if (!selecting) Surface(tonalElevation = 3.dp) {
             Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 8.dp, vertical = 6.dp)) {
                 OutlinedTextField(
                     linkText, { linkText = it.take(maxChars) },
@@ -265,7 +300,7 @@ fun App(resume: Int = 0) {
             navigationIcon = { IconButton({ exitSearch(true) }) { Icon(Icons.Default.ArrowBack, "Aramadan çık") } })
         else if (selecting) TopAppBar(
             title = { Text("${selected.size} seçili") },
-            navigationIcon = { IconButton({ selected = emptySet() }) { Icon(Icons.Default.Close, "İptal") } },
+            navigationIcon = { IconButton({ renaming = null; selected = emptySet() }) { Icon(Icons.Default.Close, "İptal") } },
             actions = {
                 if (selected.size > 1) {
                     IconButton({ dialog = "move" }) { Icon(Icons.Default.DriveFileMove, "Taşı") }
@@ -328,7 +363,7 @@ fun App(resume: Int = 0) {
                         headlineContent = { Text(e.name.removeSuffix(".url"), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         trailingContent = {
                             if (sel && selected.size == 1) Row(verticalAlignment = Alignment.CenterVertically) {
-                                IconButton({ renaming = e }, Modifier.size(40.dp)) { Icon(Icons.Default.Edit, "Adı değiştir") }
+                                IconButton({ startRename(e) }, Modifier.size(40.dp)) { Icon(Icons.Default.Edit, "Adı değiştir") }
                                 IconButton({ dialog = "move" }, Modifier.size(40.dp)) { Icon(Icons.Default.DriveFileMove, "Taşı") }
                                 IconButton({ deleteNow(listOf(e)) }, Modifier.size(40.dp)) { Icon(Icons.Default.Delete, "Sil") }
                                 Icon(
@@ -355,25 +390,6 @@ fun App(resume: Int = 0) {
             text = { Text(t, modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) },
             confirmButton = { TextButton({ note = null }) { Text("Kapat") } },
             dismissButton = { TextButton({ clipboard.setText(AnnotatedString(t)); toast("Kopyalandı") }) { Text("Kopyala") } })
-    }
-
-    renaming?.let { r ->
-        var t by remember(r) { mutableStateOf(r.name.removeSuffix(".url")) }
-        AlertDialog(
-            onDismissRequest = { renaming = null },
-            title = { Text("Adı değiştir") },
-            text = { OutlinedTextField(t, { t = it }, singleLine = true) },
-            confirmButton = {
-                TextButton({
-                    val n = t; renaming = null; selected = emptySet()
-                    scope.launch {
-                        val ok = lock.withLock { withContext(Dispatchers.IO) { Store.rename(ctx, current, r, n) } }
-                        tick++
-                        if (!ok) toast("Ad değiştirilemedi (aynı adda öğe olabilir)")
-                    }
-                }, enabled = t.isNotBlank()) { Text("Kaydet") }
-            },
-            dismissButton = { TextButton({ renaming = null }) { Text("İptal") } })
     }
 
     if (dialog == "folder") {
