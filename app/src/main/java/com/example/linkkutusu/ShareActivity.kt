@@ -16,8 +16,8 @@ class ShareActivity : Activity() {
             url == null -> "Link bulunamadı"
             root == null -> "Önce Link Cepte’yi açıp klasör seçin"
             else -> {
-                val title = intent.getStringExtra(Intent.EXTRA_SUBJECT)?.takeIf { it.isNotBlank() }
-                    ?: text.replace(url, "").trim().takeIf { it.isNotBlank() }
+                val title = intent.getStringExtra(Intent.EXTRA_SUBJECT)?.lines()?.firstOrNull { it.isNotBlank() }
+                    ?: text.replace(url, "").lines().firstOrNull { it.isNotBlank() }
                     ?: runCatching { URI(url).host }.getOrNull() ?: "link"
                 if (Store.addLink(this, root, title, url)) "Link kaydedildi" else "Kaydedilemedi"
             }

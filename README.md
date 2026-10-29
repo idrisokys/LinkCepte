@@ -7,4 +7,4 @@ Favori linklerinizi seçtiğiniz klasörde `.url` dosyaları olarak saklayan And
 - Tarayıcıdan "Paylaş" ile tek dokunuşla kaydetme
 
 ## APK
-GitHub'da **Actions → Build APK → Run workflow** çalıştırın, bitince "Artifacts" bölümünden `LinkKutusu-debug` indirin.
+GitHub'da **Actions → Build APK → Run workflow** çalıştırın, bitince "Artifacts" bölümünden `LinkCepte-apk` indirin.
