@@ -263,7 +263,7 @@ fun App(resume: Int = 0) {
         if (rn != null) Surface(tonalElevation = 3.dp) {
             Column(Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(horizontal = 8.dp, vertical = 6.dp)) {
                 OutlinedTextField(
-                    renameText, { renameText = it.take(80) },
+                    renameText, { renameText = it.take(maxChars) },
                     modifier = Modifier.fillMaxWidth().focusRequester(renameFocus),
                     label = { Text(if (rn.isDir) "Klasör adı" else "Yeni ad") },
                     singleLine = false, minLines = 1, maxLines = 4,
@@ -271,7 +271,7 @@ fun App(resume: Int = 0) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     TextButton({ renaming = null }) { Text("İptal") }
                     Spacer(Modifier.weight(1f))
-                    Text("${renameText.length}/80", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(end = 8.dp))
+                    Text("${renameText.length}/$maxChars", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(end = 8.dp))
                     Button({ saveRename() }, enabled = renameText.isNotBlank()) { Text("Kaydet") }
                 }
             }

@@ -44,12 +44,19 @@ object Store {
     }
 
     /** Dosya adında sorun çıkaran karakterleri düzgünce temizler. */
-    private fun clean(s: String): String =
+    private fun clean(s: String, max: Int = 80): String =
         s.replace(Regex("[\\r\\n\\t]+"), " ")
             .replace(Regex("\\s*[:|/\\\\]\\s*"), " - ")
             .replace(Regex("[*?\"<>]"), "")
             .replace(Regex("\\s+"), " ")
-            .trim().trimStart('.', ' ', '-').take(80).trim().ifBlank { "link" }
+            .trim().trimStart('.', ' ', '-').take(max).let { fitBytes(it) }.trim().ifBlank { "link" }
+
+    /** Dosya sistemi adı ~255 bayt ile sınırlı; ".url" ve " (2)" payı bırakarak bayt cinsinden kısaltır. */
+    private fun fitBytes(s: String, limit: Int = 240): String {
+        var t = s
+        while (t.toByteArray(Charsets.UTF_8).size > limit) t = t.dropLast(1)
+        return t
+    }
 
     /** Tek sorguyla klasörün tüm içeriği. */
     private fun children(ctx: Context, dir: Uri): List<Entry> {
@@ -205,7 +212,7 @@ object Store {
     /** Link (.url) veya klasör adını değiştirir; sıralamayı korur. */
     fun rename(ctx: Context, dir: Uri, e: Entry, title: String): Boolean = synchronized(mutex) {
         try {
-            val base = clean(title)
+            val base = clean(title, 250)
             val newName = if (e.isDir) base else "$base.url"
             if (newName == e.name) return true
             val all = children(ctx, dir)
