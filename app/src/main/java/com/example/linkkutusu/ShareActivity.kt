@@ -10,19 +10,25 @@ class ShareActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val text = intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty()
-        val url = Regex("https?://\\S+").find(text)?.value
-        val root = Store.root(this)
-        val msg = when {
-            url == null -> "Link bulunamadı"
-            root == null -> "Önce Link Cepte’yi açıp klasör seçin"
-            else -> {
-                val title = intent.getStringExtra(Intent.EXTRA_SUBJECT)?.lines()?.firstOrNull { it.isNotBlank() }
-                    ?: text.replace(url, "").lines().firstOrNull { it.isNotBlank() }
-                    ?: runCatching { URI(url).host }.getOrNull() ?: "link"
-                if (Store.addLink(this, root, title, url)) "Link kaydedildi" else "Kaydedilemedi"
+        val subject = intent.getStringExtra(Intent.EXTRA_SUBJECT)
+        val app = applicationContext
+        Thread {
+            val url = Regex("https?://\\S+").find(text)?.value
+            val root = Store.root(app)
+            val msg = when {
+                url == null -> "Link bulunamadı"
+                root == null -> "Önce Link Cepte’yi açıp klasör seçin"
+                else -> {
+                    val title = subject?.lines()?.firstOrNull { it.isNotBlank() }
+                        ?: text.replace(url, "").lines().firstOrNull { it.isNotBlank() }
+                        ?: runCatching { URI(url).host }.getOrNull() ?: "link"
+                    if (Store.addLink(app, root, title, url)) "Link kaydedildi" else "Kaydedilemedi"
+                }
             }
-        }
-        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
-        finish()
+            runOnUiThread {
+                Toast.makeText(app, msg, Toast.LENGTH_SHORT).show()
+                finish()
+            }
+        }.start()
     }
 }
