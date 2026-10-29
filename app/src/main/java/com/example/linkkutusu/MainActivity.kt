@@ -279,7 +279,7 @@ fun App(resume: Int = 0) {
         } else if (!selecting) Surface(tonalElevation = 3.dp) {
             Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 8.dp, vertical = 6.dp)) {
                 OutlinedTextField(
-                    linkText, { linkText = it.take(maxChars) },
+                    linkText, { linkText = it },
                     modifier = Modifier.fillMaxWidth(),
                     placeholder = { Text("Link veya metin yapıştır") },
                     singleLine = false, minLines = 2, maxLines = 8,
@@ -287,9 +287,9 @@ fun App(resume: Int = 0) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     IconButton({ addFromText() }, enabled = linkText.isNotBlank()) { Icon(Icons.Default.Add, "Ekle") }
                     IconButton({ startSearch() }, enabled = linkText.isNotBlank()) { Icon(Icons.Default.Search, "Ara") }
-                    IconButton({ clipboard.getText()?.text?.let { linkText = it.take(maxChars) } }) { Icon(Icons.Default.ContentPaste, "Yapıştır") }
+                    IconButton({ clipboard.getText()?.text?.let { linkText = it } }) { Icon(Icons.Default.ContentPaste, "Yapıştır") }
                     Spacer(Modifier.weight(1f))
-                    Text("${linkText.length}/$maxChars", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(end = 8.dp))
+                    Text("${linkText.length}", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(end = 8.dp))
                 }
             }
         }

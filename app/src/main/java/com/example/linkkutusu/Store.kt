@@ -127,9 +127,9 @@ object Store {
 
     /** Düz metni de kaydeder (URL olmayan kayıt). */
     fun addNote(ctx: Context, dir: Uri, text: String): Boolean {
-        // Ad, ilk satırla sınırlı kalmasın: tüm satırlar tek satırda birleştirilir (dosya adı sınırına kadar).
+        // Ad: metnin ilk 100 karakteri (satırlar tek satırda birleştirilir). Metnin tamamı TEXT= içinde durur, uzunluk sınırı yok.
         val title = text.replace(Regex("\\s+"), " ").trim().ifBlank { "not" }
-        return write(ctx, dir, title, "[InternetShortcut]\r\nTEXT=${esc(text)}\r\n".toByteArray(), 250)
+        return write(ctx, dir, title, "[InternetShortcut]\r\nTEXT=${esc(text)}\r\n".toByteArray(), 100)
     }
 
     private fun esc(text: String) = text.replace("\\", "\\\\").replace("\r", "").replace("\n", "\\n")
@@ -137,7 +137,7 @@ object Store {
     /** Seçilen metin + kaynak sayfa linki: metin ad ve TEXT= olarak, link URL= olarak saklanır. */
     fun addTextLink(ctx: Context, dir: Uri, text: String, url: String): Boolean {
         val title = text.replace(Regex("\\s+"), " ").trim().ifBlank { "link" }
-        return write(ctx, dir, title, "[InternetShortcut]\r\nURL=$url\r\nTEXT=${esc(text)}\r\n".toByteArray(), 250)
+        return write(ctx, dir, title, "[InternetShortcut]\r\nURL=$url\r\nTEXT=${esc(text)}\r\n".toByteArray(), 100)
     }
 
     /** Metindeki ilk linki bulur; sondaki noktalama işaretlerini atar. */
