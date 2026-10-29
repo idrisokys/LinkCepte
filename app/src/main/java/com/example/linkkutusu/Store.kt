@@ -129,4 +129,52 @@ object Store {
             r.readLines().map { it.trim().removePrefix("\uFEFF") }.firstOrNull { it.startsWith("URL=", true) }?.substring(4)?.trim()
         }
     } catch (e: Exception) { null }
+
+    /** Düz metni de kaydeder (URL olmayan kayıt). */
+    fun addNote(ctx: Context, dir: Uri, text: String): Boolean {
+        val title = text.lines().firstOrNull { it.isNotBlank() }?.trim() ?: "not"
+        val enc = text.replace("\\", "\\\\").replace("\r", "").replace("\n", "\\n")
+        return write(ctx, dir, title, "[InternetShortcut]\r\nTEXT=$enc\r\n".toByteArray())
+    }
+
+    fun readText(ctx: Context, uri: Uri): String? = try {
+        ctx.contentResolver.openInputStream(uri)?.bufferedReader()?.use { r ->
+            r.readLines().map { it.trim().removePrefix("\uFEFF") }.firstOrNull { it.startsWith("TEXT=", true) }?.substring(5)?.let { dec ->
+                val sb = StringBuilder(); var i = 0
+                while (i < dec.length) {
+                    val c = dec[i]
+                    if (c == '\\' && i + 1 < dec.length) { sb.append(if (dec[i + 1] == 'n') '\n' else dec[i + 1]); i += 2 }
+                    else { sb.append(c); i++ }
+                }
+                sb.toString()
+            }
+        }
+    } catch (e: Exception) { null }
+
+    /** Sayfanın <title> değerini getirir; olmazsa null. Arka plan thread'inde çağrılmalı. */
+    fun fetchTitle(url: String): String? {
+        var conn: java.net.HttpURLConnection? = null
+        return try {
+            conn = (java.net.URL(url).openConnection() as java.net.HttpURLConnection).apply {
+                connectTimeout = 5000; readTimeout = 5000; instanceFollowRedirects = true
+                setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36")
+                setRequestProperty("Accept-Language", "tr,en;q=0.8")
+            }
+            if (conn.responseCode !in 200..299) return null
+            val buf = ByteArray(200_000)
+            var n = 0
+            conn.inputStream.use { ins ->
+                while (n < buf.size) { val r = ins.read(buf, n, buf.size - n); if (r < 0) break; n += r }
+            }
+            val head = String(buf, 0, n, Charsets.ISO_8859_1)
+            val cs = Regex("charset=([\\w-]+)", RegexOption.IGNORE_CASE).find(conn.contentType ?: "")?.groupValues?.get(1)
+                ?: Regex("<meta[^>]+charset=[\"']?([\\w-]+)", RegexOption.IGNORE_CASE).find(head)?.groupValues?.get(1)
+            val charset = try { java.nio.charset.Charset.forName(cs ?: "UTF-8") } catch (e: Exception) { Charsets.UTF_8 }
+            val html = String(buf, 0, n, charset)
+            val raw = Regex("<title[^>]*>(.*?)</title>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)).find(html)?.groupValues?.get(1)
+                ?: return null
+            val t = android.text.Html.fromHtml(raw, android.text.Html.FROM_HTML_MODE_LEGACY).toString().replace(Regex("\\s+"), " ").trim()
+            t.ifBlank { null }
+        } catch (e: Exception) { null } finally { conn?.disconnect() }
+    }
 }

@@ -13,6 +13,8 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -25,8 +27,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
@@ -61,6 +63,7 @@ fun App(resume: Int = 0) {
     var toDelete by remember { mutableStateOf<List<Entry>?>(null) }
     var renaming by remember { mutableStateOf<Entry?>(null) }
     var menu by remember { mutableStateOf(false) }
+    var note by remember { mutableStateOf<String?>(null) }
     var editMode by remember { mutableStateOf(false) }
     var linkText by remember { mutableStateOf("") }
     val clipboard = LocalClipboardManager.current
@@ -108,21 +111,30 @@ fun App(resume: Int = 0) {
     fun open(e: Entry) {
         scope.launch {
             val u = withContext(Dispatchers.IO) { Store.readUrl(ctx, e.uri) }
-            if (u == null) toast("Link okunamadı")
+            if (u == null) {
+                val t = withContext(Dispatchers.IO) { Store.readText(ctx, e.uri) }
+                if (t != null) note = t else toast("Link okunamadı")
+            }
             else try { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u))) } catch (ex: Exception) { toast("Link açılamadı") }
         }
     }
     fun addFromText() {
         val text = linkText.trim()
+        if (text.isEmpty()) return
         val url = Regex("https?://\\S+").find(text)?.value
-        if (url == null) { toast("Geçerli bir link bulunamadı"); return }
-        val title = text.replace(url, "").lines().firstOrNull { it.isNotBlank() }?.trim()
-            ?: runCatching { java.net.URI(url).host }.getOrNull() ?: "link"
         linkText = ""
         scope.launch {
-            val ok = lock.withLock { withContext(Dispatchers.IO) { Store.addLink(ctx, current, title, url) } }
+            val ok = withContext(Dispatchers.IO) {
+                if (url == null) lock.withLock { Store.addNote(ctx, current, text) }
+                else {
+                    val title = Store.fetchTitle(url)
+                        ?: text.replace(url, "").lines().firstOrNull { it.isNotBlank() }?.trim()
+                        ?: runCatching { java.net.URI(url).host }.getOrNull() ?: "link"
+                    lock.withLock { Store.addLink(ctx, current, title, url) }
+                }
+            }
             tick++
-            toast(if (ok) "Link eklendi" else "Eklenemedi")
+            toast(if (ok) "Eklendi" else "Eklenemedi")
         }
     }
     fun toggle(e: Entry) { val k = e.uri.toString(); selected = if (k in selected) selected - k else selected + k }
@@ -133,13 +145,12 @@ fun App(resume: Int = 0) {
                 OutlinedTextField(
                     linkText, { linkText = it },
                     modifier = Modifier.weight(1f),
-                    placeholder = { Text("Link yapıştır") },
-                    singleLine = true,
+                    placeholder = { Text("Link veya metin yapıştır") },
+                    singleLine = false, maxLines = 3,
                     trailingIcon = {
                         IconButton({ clipboard.getText()?.text?.let { linkText = it } }) { Icon(Icons.Default.ContentPaste, "Yapıştır") }
                     },
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { if (linkText.isNotBlank()) addFromText() }))
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default))
                 IconButton({ addFromText() }, enabled = linkText.isNotBlank()) { Icon(Icons.Default.Add, "Ekle") }
             }
         }
@@ -199,6 +210,14 @@ fun App(resume: Int = 0) {
                 HorizontalDivider()
             }
         }
+    }
+
+    note?.let { t ->
+        AlertDialog(
+            onDismissRequest = { note = null },
+            text = { Text(t, modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) },
+            confirmButton = { TextButton({ note = null }) { Text("Kapat") } },
+            dismissButton = { TextButton({ clipboard.setText(AnnotatedString(t)); toast("Kopyalandı") }) { Text("Kopyala") } })
     }
 
     renaming?.let { r ->
