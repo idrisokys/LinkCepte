@@ -44,7 +44,7 @@ bölümünden *Link Cepte’ye Ekle* kutusunu işaretleyin.
 ## Safari ve Chrome Paylaş menüsü (deneysel)
 
 Uygulamayı **Uygulamalar** klasörüne taşıyıp **bir kez açın**. Sonra Safari'de Paylaş düğmesine basın.
-Chrome'da menü çubuğundan **Dosya → Paylaş → Link Cepte** yolunu kullanın (Chrome sistemin Paylaş listesini kullanır, ayrı eklenti gerekmez).
+Chrome'da tek tıkla göndermek için depodaki `chrome-extension/` klasöründeki eklentiyi kurun (kurulum: `chrome-extension/README.md`).
 *Link Cepte* listede yoksa: Paylaş menüsünün altındaki **Eklentileri Düzenle…** (veya Sistem Ayarları →
 Gizlilik ve Güvenlik → Eklentiler → Paylaşım) bölümünden *Link Cepte* kutusunu işaretleyin.
 Eklenti imzasız (geçici imzalı) olduğu için macOS bunu engelleyebilir; çalışmazsa Servisler menüsü ve

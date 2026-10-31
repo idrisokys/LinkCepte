@@ -324,6 +324,8 @@ fun App(resume: Int = 0) {
                 IconButton({ editMode = !editMode; selected = emptySet() }) {
                     Icon(if (editMode) Icons.Default.Done else Icons.Default.Edit, if (editMode) "Düzenlemeyi bitir" else "Düzenle")
                 }
+                // En sağdaki yenile tuşu: kayıtlı klasörü yeniden tarar (başka cihazdan eşitlenen değişiklikleri getirir)
+                IconButton({ tick++; toast("Yenilendi") }) { Icon(Icons.Default.Refresh, "Yenile") }
             })
     }) { pad ->
         if (searchQuery != null) SearchResults(pad, hits, { open(it) }) { path ->
