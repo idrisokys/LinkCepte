@@ -12,5 +12,8 @@ Araç çubuğundaki simgeye tıklayınca açık sekmenin linki Mac'teki **Link C
 Chrome ilk seferde "Link Cepte'yi açmak istiyor musunuz?" diye sorar. **"chrome-extension://… her zaman bu türdeki bağlantıları ilişkili uygulamada açabilir"** kutusunu işaretleyip **Aç**'a basın; sonraki tıklamalar sormaz.
 
 ## Notlar
+- Sağ tık menüsünde de **Link Cepte'ye gönder** vardır (sayfaya veya bir linke sağ tıklayın).
+- Başarılı gönderimde simgede kısa süre ✓, gönderilemeyen sayfalarda ! görünür.
+- Eklentiyi güncelledikten sonra `chrome://extensions` sayfasında eklentinin ↻ (yeniden yükle) düğmesine basın.
 - Sadece `http/https` sayfaları gönderilir.
 - Uygulamanın kapalıysa linkle birlikte açılır; klasör seçilmemişse önce klasörü seçmeniz istenir.
