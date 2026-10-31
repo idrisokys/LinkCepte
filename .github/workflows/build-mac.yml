@@ -1,0 +1,15 @@
+name: Build Mac App
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash mac/build_app.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LinkCepte-mac
+          path: mac/build/LinkCepte-mac.zip

@@ -9,3 +9,5 @@ captures/
 *.aab
 *.jks
 *.keystore
+mac/build/
+mac/.build/
