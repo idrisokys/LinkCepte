@@ -21,6 +21,10 @@ Klasör seçimi, alttan link/metin ekleme (başlığı otomatik alma, 220 karakt
 arama (Türkçe i/ı ve aksan duyarsız, tüm kelimeler geçmeli), klasörler, düzenleme modu
 (seçme, ad değiştirme, taşıma + yeni klasör, sürükleyerek sıralama), karanlık/açık tema (sistemi izler).
 
+**Diller:** Cihazın birinci dili Türkçe ise uygulama Türkçe, değilse İngilizce çalışır.
+
+**Yenile:** Araç çubuğunun en sağındaki ↻ simgesi (veya ⌘R) kayıtlı klasörü yeniden tarar.
+
 ## Mac'e özgü farklar
 
 | Android | Mac |
@@ -37,10 +41,20 @@ Klavye: ⌘↩ ekle, ⌘F ara, ⌘E düzenle, ⌘R yenile, ⌘[ geri, ⇧⌘N ye
 koyup bir kez açın; görünmezse oturumu kapatıp açın veya Sistem Ayarları → Klavye → Klavye Kısayolları → Servisler
 bölümünden *Link Cepte’ye Ekle* kutusunu işaretleyin.
 
-## Safari Paylaş menüsü (deneysel)
+## Safari ve Chrome Paylaş menüsü (deneysel)
 
 Uygulamayı **Uygulamalar** klasörüne taşıyıp **bir kez açın**. Sonra Safari'de Paylaş düğmesine basın.
+Chrome'da menü çubuğundan **Dosya → Paylaş → Link Cepte** yolunu kullanın (Chrome sistemin Paylaş listesini kullanır, ayrı eklenti gerekmez).
 *Link Cepte* listede yoksa: Paylaş menüsünün altındaki **Eklentileri Düzenle…** (veya Sistem Ayarları →
 Gizlilik ve Güvenlik → Eklentiler → Paylaşım) bölümünden *Link Cepte* kutusunu işaretleyin.
 Eklenti imzasız (geçici imzalı) olduğu için macOS bunu engelleyebilir; çalışmazsa Servisler menüsü ve
 sürükle-bırak yolları yine kullanılabilir.
+
+---
+
+# Link Cepte — Mac version (English)
+
+A SwiftUI rewrite of the Android app. It uses the **same file format** (`.url` files, `TEXT=` notes, `.txt`, hidden `.order.txt`),
+so Android and Mac can share one synced folder. The app runs in English unless the device's first language is Turkish.
+The ↻ button at the far right of the toolbar (or ⌘R) rescans the saved folder.
+Share: Safari's Share button, Chrome's *File → Share*, the Services menu, or drag a link into the window.

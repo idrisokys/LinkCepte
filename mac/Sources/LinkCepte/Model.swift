@@ -41,8 +41,8 @@ final class Model: ObservableObject {
     var list: [Entry] { loaded ?? [] }
 
     var title: String {
-        if let q = searchQuery { return "“\(q)”" + (hits.map { " · \($0.count) sonuç" } ?? "") }
-        if editMode && !selected.isEmpty { return "\(selected.count) seçili" }
+        if let q = searchQuery { return "“\(q)”" + (hits.map { " · \($0.count) \(L("sonuç", "results"))" } ?? "") }
+        if editMode && !selected.isEmpty { return "\(selected.count) \(L("seçili", "selected"))" }
         return stack.last?.name ?? "Link Cepte"
     }
 
@@ -56,12 +56,29 @@ final class Model: ObservableObject {
 
     // MARK: - Gezinme
 
-    func reload() {
+    func reload(then: (() -> Void)? = nil) {
         guard let dir = current else { loaded = nil; return }
         Task {
             let r = await self.io { Store.list(dir) }
             if self.current == dir { self.loaded = r }
+            then?()
         }
+    }
+
+    /// Yenile düğmesi: kayıtlı klasörü yeniden tarar (arama açıksa aramayı yeniden çalıştırır).
+    func refresh() {
+        root = Store.root
+        guard root != nil else { return }
+        // Klasör dışarıdan silinmiş veya taşınmışsa gezinme yolunu geçerli son klasöre indir
+        let fm = FileManager.default
+        var valid = [Entry]()
+        for e in stack {
+            var d: ObjCBool = false
+            if fm.fileExists(atPath: e.url.path, isDirectory: &d), d.boolValue { valid.append(e) } else { break }
+        }
+        if valid.count != stack.count { stack = valid; selected = [] }
+        if let q = searchQuery { runSearch(q); return }
+        reload { HUD.show(L("Yenilendi", "Refreshed")) }
     }
 
     func setStack(_ s: [Entry]) {
@@ -84,14 +101,14 @@ final class Model: ObservableObject {
         p.canChooseFiles = false
         p.canCreateDirectories = true
         p.allowsMultipleSelection = false
-        p.prompt = "Seç"
-        p.message = "Linklerin kaydedileceği klasörü seçin."
+        p.prompt = L("Seç", "Choose")
+        p.message = L("Linklerin kaydedileceği klasörü seçin.", "Choose the folder where your links will be saved.")
         if p.runModal() == .OK, let u = p.url {
             if Store.setRoot(u) {
                 root = Store.root
                 setStack([])
             } else {
-                toast("Bu klasöre yazılamıyor, başka bir klasör seçin")
+                toast(L("Bu klasöre yazılamıyor, başka bir klasör seçin", "Can't write to this folder, choose another one"))
             }
         }
     }
@@ -117,18 +134,18 @@ final class Model: ObservableObject {
         Task {
             if e.isTxt {
                 let t = await self.io { Store.readPlain(e.url) }
-                if let t = t { self.noteText = t; self.sheet = .note } else { self.toast("Dosya okunamadı") }
+                if let t = t { self.noteText = t; self.sheet = .note } else { self.toast(L("Dosya okunamadı", "Couldn't read the file")) }
                 return
             }
             let (u, t) = await self.io { Store.readLink(e.url) }
             if let u = u {
                 if let link = Store.makeURL(u), NSWorkspace.shared.open(link) { return }
-                self.toast("Link açılamadı")
+                self.toast(L("Link açılamadı", "Couldn't open the link"))
             } else if let t = t {
                 self.noteText = t
                 self.sheet = .note
             } else {
-                self.toast("Link okunamadı")
+                self.toast(L("Link okunamadı", "Couldn't read the link"))
             }
         }
     }
@@ -142,7 +159,7 @@ final class Model: ObservableObject {
         Task {
             let ok = await self.io { Store.addTextFile(dir, text: text) }
             self.reload()
-            self.toast(ok ? "Metin dosyası eklendi" : "Eklenemedi")
+            self.toast(ok ? L("Metin dosyası eklendi", "Text file added") : L("Eklenemedi", "Couldn't add"))
         }
     }
 
@@ -150,11 +167,12 @@ final class Model: ObservableObject {
         let text = linkText.trimmed
         guard !text.isEmpty, let dir = current else { return }
         if text.count > addMax {
-            toast("\(addMax) karakteri aşıyor. + simgesine uzun basarak (veya ⌥ ile tıklayarak) .txt olarak kaydedin")
+            toast(L("\(addMax) karakteri aşıyor. + simgesine uzun basarak (veya ⌥ ile tıklayarak) .txt olarak kaydedin",
+                  "Exceeds \(addMax) characters. Long-press + (or ⌥-click) to save it as a .txt file"))
             return
         }
         linkText = ""
-        addExternal(text, into: dir, okMessage: "Eklendi")
+        addExternal(text, into: dir, okMessage: L("Eklendi", "Added"))
     }
 
     /// Sürükle-bırak ve Servisler menüsünden gelen metin/link.
@@ -162,15 +180,15 @@ final class Model: ObservableObject {
         Task {
             let ok = await Store.addFromText(dir, text, nil)
             self.reload()
-            self.toast(ok ? okMessage : "Kaydedilemedi")
+            self.toast(ok ? okMessage : L("Kaydedilemedi", "Couldn't save"))
         }
     }
 
     /// Servisler menüsü: ana listeye ekler (Android'deki Paylaş → Link Cepte karşılığı).
     func shareAdd(_ text: String) {
-        if text.trimmed.isEmpty { toast("Paylaşılacak bir şey bulunamadı"); return }
-        guard let r = root else { toast("Önce Link Cepte’yi açıp klasör seçin"); return }
-        addExternal(text, into: r, okMessage: "Kaydedildi")
+        if text.trimmed.isEmpty { toast(L("Paylaşılacak bir şey bulunamadı", "Nothing to share")); return }
+        guard let r = root else { toast(L("Önce Link Cepte’yi açıp klasör seçin", "Open Link Cepte and choose a folder first")); return }
+        addExternal(text, into: r, okMessage: L("Kaydedildi", "Saved"))
     }
 
     func handleDrop(_ providers: [NSItemProvider]) -> Bool {
@@ -179,14 +197,14 @@ final class Model: ObservableObject {
             if p.canLoadObject(ofClass: URL.self) {
                 _ = p.loadObject(ofClass: URL.self) { url, _ in
                     guard let url = url, !url.isFileURL else { return }
-                    Task { @MainActor in self.addExternal(url.absoluteString, into: dir, okMessage: "Eklendi") }
+                    Task { @MainActor in self.addExternal(url.absoluteString, into: dir, okMessage: L("Eklendi", "Added")) }
                 }
                 return true
             }
             if p.canLoadObject(ofClass: String.self) {
                 _ = p.loadObject(ofClass: String.self) { s, _ in
                     guard let s = s, !s.trimmed.isEmpty else { return }
-                    Task { @MainActor in self.addExternal(s, into: dir, okMessage: "Eklendi") }
+                    Task { @MainActor in self.addExternal(s, into: dir, okMessage: L("Eklendi", "Added")) }
                 }
                 return true
             }
@@ -202,10 +220,15 @@ final class Model: ObservableObject {
 
     func startSearch() {
         let q = linkText.trimmed
-        guard !q.isEmpty, let rootURL = root else { return }
+        guard !q.isEmpty else { return }
         NSApp.keyWindow?.makeFirstResponder(nil)
         editMode = false
         selected = []
+        runSearch(q)
+    }
+
+    func runSearch(_ q: String) {
+        guard let rootURL = root else { return }
         searchFlag?.cancel()
         let flag = CancelFlag()
         searchFlag = flag
@@ -250,7 +273,7 @@ final class Model: ObservableObject {
         Task {
             let ok = await self.io { Store.rename(dir, r, n) }
             self.reload()
-            if !ok { self.toast("Ad değiştirilemedi (aynı adda öğe olabilir)") }
+            if !ok { self.toast(L("Ad değiştirilemedi (aynı adda öğe olabilir)", "Couldn't rename (an item with that name may exist)")) }
         }
     }
 
@@ -275,7 +298,9 @@ final class Model: ObservableObject {
         Task {
             let ok = await self.io { files.filter { Store.moveEntry($0, to: target) }.count }
             self.reload()
-            self.toast(ok == files.count ? "\(ok) öğe taşındı" : "\(ok)/\(files.count) öğe taşınabildi")
+            self.toast(ok == files.count
+                  ? L("\(ok) öğe taşındı", "\(ok) item(s) moved")
+                  : L("\(ok)/\(files.count) öğe taşınabildi", "\(ok)/\(files.count) item(s) could be moved"))
         }
     }
 

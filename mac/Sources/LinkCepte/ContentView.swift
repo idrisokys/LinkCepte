@@ -22,8 +22,8 @@ struct WelcomeView: View {
     var body: some View {
         VStack(spacing: 14) {
             Text("Link Cepte").font(.largeTitle)
-            Text("Linklerin kaydedileceği klasörü seçin.")
-            Button("Klasör seç") { m.chooseFolder() }
+            Text(L("Linklerin kaydedileceği klasörü seçin.", "Choose the folder where your links will be saved."))
+            Button(L("Klasör seç", "Choose folder")) { m.chooseFolder() }
                 .keyboardShortcut(.defaultAction)
         }
         .padding(24)
@@ -45,30 +45,33 @@ struct MainView: View {
             ToolbarItemGroup(placement: .navigation) {
                 if m.searchQuery != nil {
                     Button { m.exitSearch(true) } label: { Image(systemName: "chevron.left") }
-                        .help("Aramadan çık")
+                        .help(L("Aramadan çık", "Exit search"))
                 } else if !m.stack.isEmpty {
                     Button { m.goBack() } label: { Image(systemName: "chevron.left") }
-                        .help("Geri")
+                        .help(L("Geri", "Back"))
                 }
             }
             ToolbarItemGroup(placement: .primaryAction) {
                 if m.searchQuery == nil {
                     if m.editMode && !m.selected.isEmpty {
                         Button { m.beginMove() } label: { Image(systemName: "arrowshape.turn.up.right") }
-                            .help("Taşı")
+                            .help(L("Taşı", "Move"))
                         Button { m.deleteSelected() } label: { Image(systemName: "trash") }
-                            .help("Sil (Çöp Kutusu’na)")
+                            .help(L("Sil (Çöp Kutusu’na)", "Delete (move to Trash)"))
                     }
                     Button { m.sheet = .folder } label: { Image(systemName: "folder.badge.plus") }
-                        .help("Yeni klasör")
+                        .help(L("Yeni klasör", "New folder"))
                     Menu {
-                        Button("Klasörü değiştir…") { m.chooseFolder() }
+                        Button(L("Klasörü değiştir…", "Change folder…")) { m.chooseFolder() }
                     } label: { Image(systemName: "ellipsis.circle") }
                         .menuIndicator(.hidden)
-                        .help("Menü")
+                        .help(L("Menü", "Menu"))
                     Button { m.toggleEdit() } label: { Image(systemName: m.editMode ? "checkmark" : "pencil") }
-                        .help(m.editMode ? "Düzenlemeyi bitir" : "Düzenle")
+                        .help(m.editMode ? L("Düzenlemeyi bitir", "Done editing") : L("Düzenle", "Edit"))
                 }
+                // En sağda: kayıtlı klasörü yeniden tarar
+                Button { m.refresh() } label: { Image(systemName: "arrow.clockwise") }
+                    .help(L("Yenile (⌘R)", "Refresh (⌘R)"))
             }
         }
         .sheet(item: $m.sheet) { s in
@@ -98,7 +101,7 @@ struct MainView: View {
         .listStyle(.inset)
         .overlay {
             if m.loaded != nil && m.list.isEmpty {
-                Text("Burada henüz bir şey yok. Alttaki alana link veya metin yapıştırın, ya da bir linki pencereye sürükleyip bırakın.")
+                Text(L("Burada henüz bir şey yok. Alttaki alana link veya metin yapıştırın, ya da bir linki pencereye sürükleyip bırakın.", "Nothing here yet. Paste a link or text into the box below, or drag a link into the window."))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
                     .padding(32)
@@ -116,7 +119,7 @@ struct MainView: View {
                     .frame(width: 22)
                 Image(systemName: "line.3.horizontal")
                     .foregroundStyle(.secondary)
-                    .help("Sürükleyerek sırala")
+                    .help(L("Sürükleyerek sırala", "Drag to reorder"))
             } else {
                 Image(systemName: e.isDir ? "folder" : (e.isTxt ? "doc.text" : "link"))
                     .frame(width: 24)
@@ -126,7 +129,7 @@ struct MainView: View {
             if m.editMode {
                 Button { m.startRename(e) } label: { Image(systemName: "pencil") }
                     .buttonStyle(.borderless)
-                    .help("Adı değiştir")
+                    .help(L("Adı değiştir", "Rename"))
             }
         }
         .padding(.vertical, 4)
@@ -150,7 +153,7 @@ struct AddBar: View {
                     .scrollContentBackground(.hidden)
                     .padding(4)
                 if m.linkText.isEmpty {
-                    Text("Link veya metin yapıştır (+ uzun bas: .txt)")
+                    Text(L("Link veya metin yapıştır (+ uzun bas: .txt)", "Paste a link or text (long-press +: .txt)"))
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 9)
                         .padding(.vertical, 12)
@@ -168,7 +171,7 @@ struct AddBar: View {
                     .frame(width: 30, height: 30)
                     .background(Circle().fill(Color.accentColor.opacity(canAdd ? 0.95 : 0.3)))
                     .contentShape(Circle())
-                    .help("Ekle (uzun basın veya ⌥ ile tıklayın: .txt)")
+                    .help(L("Ekle (uzun basın veya ⌥ ile tıklayın: .txt)", "Add (long-press or ⌥-click: .txt)"))
                     .onTapGesture {
                         guard canAdd else { return }
                         if NSEvent.modifierFlags.contains(.option) { m.addTxt() } else { m.addFromText() }
@@ -178,9 +181,9 @@ struct AddBar: View {
                     }
                 Button { m.startSearch() } label: { Image(systemName: "magnifyingglass") }
                     .disabled(!canAdd)
-                    .help("Ara")
+                    .help(L("Ara", "Search"))
                 Button { m.paste() } label: { Image(systemName: "doc.on.clipboard") }
-                    .help("Yapıştır")
+                    .help(L("Yapıştır", "Paste"))
                 Spacer()
                 Text("\(m.linkText.count)/\(m.addMax)")
                     .font(.caption)
@@ -198,7 +201,7 @@ struct RenameBar: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            TextField(m.renaming?.isDir == true ? "Klasör adı" : "Yeni ad", text: $m.renameText, axis: .vertical)
+            TextField(m.renaming?.isDir == true ? L("Klasör adı", "Folder name") : L("Yeni ad", "New name"), text: $m.renameText, axis: .vertical)
                 .lineLimit(1...4)
                 .textFieldStyle(.roundedBorder)
                 .focused($focused)
@@ -207,12 +210,12 @@ struct RenameBar: View {
                     if v.count > m.maxChars { m.renameText = String(v.prefix(m.maxChars)) }
                 }
             HStack {
-                Button("İptal") { m.renaming = nil }
+                Button(L("İptal", "Cancel")) { m.renaming = nil }
                 Spacer()
                 Text("\(m.renameText.count)/\(m.maxChars)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Button("Kaydet") { m.saveRename() }
+                Button(L("Kaydet", "Save")) { m.saveRename() }
                     .keyboardShortcut(.defaultAction)
                     .disabled(m.renameText.trimmed.isEmpty)
             }
@@ -231,7 +234,7 @@ struct SearchResultsView: View {
     var body: some View {
         if let hits = m.hits {
             if hits.isEmpty {
-                Text("Sonuç bulunamadı.")
+                Text(L("Sonuç bulunamadı.", "No results found."))
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -251,7 +254,7 @@ struct SearchResultsView: View {
                 .frame(width: 24)
                 .padding(.top, 2)
             VStack(alignment: .leading, spacing: 2) {
-                Text(h.path.isEmpty ? "Ana liste" : h.path.map { $0.name }.joined(separator: " › "))
+                Text(h.path.isEmpty ? L("Ana liste", "Main list") : h.path.map { $0.name }.joined(separator: " › "))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -269,7 +272,7 @@ struct SearchResultsView: View {
                 m.setStack(h.path)
             } label: { Image(systemName: "folder") }
                 .buttonStyle(.borderless)
-                .help("Klasöre git")
+                .help(L("Klasöre git", "Show in folder"))
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())

@@ -13,13 +13,13 @@ struct NoteSheet: View {
             }
             .frame(minHeight: 80, idealHeight: 240, maxHeight: 360)
             HStack {
-                Button("Kopyala") {
+                Button(L("Kopyala", "Copy")) {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(m.noteText, forType: .string)
-                    HUD.show("Kopyalandı")
+                    HUD.show(L("Kopyalandı", "Copied"))
                 }
                 Spacer()
-                Button("Kapat") { m.sheet = nil }
+                Button(L("Kapat", "Close")) { m.sheet = nil }
                     .keyboardShortcut(.defaultAction)
             }
         }
@@ -35,16 +35,16 @@ struct FolderSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Yeni klasör").font(.headline)
-            TextField("Klasör adı", text: $name)
+            Text(L("Yeni klasör", "New folder")).font(.headline)
+            TextField(L("Klasör adı", "Folder name"), text: $name)
                 .textFieldStyle(.roundedBorder)
                 .focused($focused)
                 .onSubmit { create() }
             HStack {
                 Spacer()
-                Button("İptal") { m.sheet = nil }
+                Button(L("İptal", "Cancel")) { m.sheet = nil }
                     .keyboardShortcut(.cancelAction)
-                Button("Oluştur") { create() }
+                Button(L("Oluştur", "Create")) { create() }
                     .keyboardShortcut(.defaultAction)
                     .disabled(name.trimmed.isEmpty)
             }
@@ -77,19 +77,19 @@ struct MoveSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Taşı: " + (stack.last?.name ?? "Ana liste")).font(.headline).lineLimit(1)
+            Text(L("Taşı: ", "Move to: ") + (stack.last?.name ?? L("Ana liste", "Main list"))).font(.headline).lineLimit(1)
             List {
                 if !stack.isEmpty {
-                    line("arrow.left", "Üst klasör") { stack.removeLast() }
+                    line("arrow.left", L("Üst klasör", "Parent folder")) { stack.removeLast() }
                 }
                 if !creating {
-                    line("folder.badge.plus", "Yeni klasör oluştur") { creating = true }
+                    line("folder.badge.plus", L("Yeni klasör oluştur", "Create new folder")) { creating = true }
                 } else {
                     HStack {
-                        TextField("Klasör adı", text: $newName)
+                        TextField(L("Klasör adı", "Folder name"), text: $newName)
                             .textFieldStyle(.roundedBorder)
                             .onSubmit { createFolder() }
-                        Button("Oluştur") { createFolder() }
+                        Button(L("Oluştur", "Create")) { createFolder() }
                             .disabled(newName.trimmed.isEmpty)
                     }
                 }
@@ -101,9 +101,9 @@ struct MoveSheet: View {
             .frame(height: 300)
             HStack {
                 Spacer()
-                Button("İptal") { m.sheet = nil; m.moving = [] }
+                Button(L("İptal", "Cancel")) { m.sheet = nil; m.moving = [] }
                     .keyboardShortcut(.cancelAction)
-                Button("Buraya taşı") { m.performMove(to: dir) }
+                Button(L("Buraya taşı", "Move here")) { m.performMove(to: dir) }
                     .keyboardShortcut(.defaultAction)
                     .disabled(dir.path == current.path)
             }

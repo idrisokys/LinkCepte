@@ -16,23 +16,23 @@ struct LinkCepteApp: App {
         .commands {
             CommandGroup(replacing: .newItem) { }
             CommandMenu("Link") {
-                Button("Ekle") { model.addFromText() }
+                Button(L("Ekle", "Add")) { model.addFromText() }
                     .keyboardShortcut(.return, modifiers: .command)
-                Button("Metin Dosyası Olarak Ekle (.txt)") { model.addTxt() }
+                Button(L("Metin Dosyası Olarak Ekle (.txt)", "Add as Text File (.txt)")) { model.addTxt() }
                     .keyboardShortcut(.return, modifiers: [.command, .shift])
-                Button("Ara") { model.startSearch() }
+                Button(L("Ara", "Search")) { model.startSearch() }
                     .keyboardShortcut("f", modifiers: .command)
                 Divider()
-                Button("Yeni Klasör") { model.sheet = .folder }
+                Button(L("Yeni Klasör", "New Folder")) { model.sheet = .folder }
                     .keyboardShortcut("n", modifiers: [.command, .shift])
-                Button("Düzenle") { model.toggleEdit() }
+                Button(L("Düzenle", "Edit")) { model.toggleEdit() }
                     .keyboardShortcut("e", modifiers: .command)
-                Button("Geri") { model.goBack() }
+                Button(L("Geri", "Back")) { model.goBack() }
                     .keyboardShortcut("[", modifiers: .command)
-                Button("Yenile") { model.reload() }
+                Button(L("Yenile", "Refresh")) { model.refresh() }
                     .keyboardShortcut("r", modifiers: .command)
                 Divider()
-                Button("Klasörü Değiştir…") { model.chooseFolder() }
+                Button(L("Klasörü Değiştir…", "Change Folder…")) { model.chooseFolder() }
                     .keyboardShortcut("o", modifiers: .command)
             }
         }

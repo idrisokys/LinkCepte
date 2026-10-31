@@ -13,8 +13,10 @@ BIN="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)/LinkCe
 cp "$BIN" "$APP/Contents/MacOS/LinkCepte"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 
-# Sistem menülerinin Türkçe görünmesi için dil klasörleri
+# Dil klasörleri (sistem menüleri ve Servisler menüsü başlığı için)
 mkdir -p "$APP/Contents/Resources/tr.lproj" "$APP/Contents/Resources/en.lproj"
+cp Resources/tr.lproj/ServicesMenu.strings "$APP/Contents/Resources/tr.lproj/"
+cp Resources/en.lproj/ServicesMenu.strings "$APP/Contents/Resources/en.lproj/"
 
 # İkon
 ICONSET="build/AppIcon.iconset"
