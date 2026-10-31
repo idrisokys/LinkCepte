@@ -100,7 +100,7 @@ fun App(resume: Int = 0) {
     val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
         if (uri != null) {
             if (Store.setRoot(ctx, uri)) { root = Store.root(ctx); stack = emptyList(); tick++ }
-            else toast("Bu klasöre yazılamıyor, başka bir klasör seçin")
+            else toast(L("Bu klasöre yazılamıyor, başka bir klasör seçin", "Cannot write to this folder, choose another one"))
         }
     }
 
@@ -109,9 +109,9 @@ fun App(resume: Int = 0) {
         Column(Modifier.fillMaxSize().padding(24.dp), Arrangement.Center, Alignment.CenterHorizontally) {
             Text("Link Cepte", style = MaterialTheme.typography.headlineMedium)
             Spacer(Modifier.height(12.dp))
-            Text("Linklerin kaydedileceği klasörü seçin.")
+            Text(L("Linklerin kaydedileceği klasörü seçin.", "Choose the folder where links will be saved."))
             Spacer(Modifier.height(16.dp))
-            Button(onClick = { pickFolder.launch(null) }) { Text("Klasör seç") }
+            Button(onClick = { pickFolder.launch(null) }) { Text(L("Klasör seç", "Choose folder")) }
         }
         return
     }
@@ -190,14 +190,14 @@ fun App(resume: Int = 0) {
         scope.launch {
             if (e.isTxt) {
                 val t = withContext(Dispatchers.IO) { Store.readPlain(ctx, e.uri) }
-                if (t != null) note = t else toast("Dosya okunamadı")
+                if (t != null) note = t else toast(L("Dosya okunamadı", "Could not read file"))
                 return@launch
             }
             val (u, t) = withContext(Dispatchers.IO) { Store.readLink(ctx, e.uri) }
             if (u == null) {
-                if (t != null) note = t else toast("Link okunamadı")
+                if (t != null) note = t else toast(L("Link okunamadı", "Could not read link"))
             }
-            else try { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u))) } catch (ex: Exception) { toast("Link açılamadı") }
+            else try { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u))) } catch (ex: Exception) { toast(L("Link açılamadı", "Could not open link")) }
         }
     }
     fun addTxt() {
@@ -208,19 +208,19 @@ fun App(resume: Int = 0) {
         scope.launch {
             val ok = withContext(Dispatchers.IO) { Store.addTextFile(ctx, current, text) }
             tick++
-            toast(if (ok) "Metin dosyası eklendi" else "Eklenemedi")
+            toast(if (ok) L("Metin dosyası eklendi", "Text file added") else L("Eklenemedi", "Could not add"))
         }
     }
     fun addFromText() {
         val text = linkText.trim()
         if (text.isEmpty()) return
-        if (text.length > addMax) { toast("$addMax karakteri aşıyor. + simgesine uzun basarak .txt olarak kaydedin"); return }
+        if (text.length > addMax) { toast(L("$addMax karakteri aşıyor. + simgesine uzun basarak .txt olarak kaydedin", "Over $addMax characters. Long-press + to save as .txt")); return }
         linkText = ""
         focus.clearFocus()
         scope.launch {
             val ok = withContext(Dispatchers.IO) { Store.addFromText(ctx, current, text) }
             tick++
-            toast(if (ok) "Eklendi" else "Eklenemedi")
+            toast(if (ok) L("Eklendi", "Added") else L("Eklenemedi", "Could not add"))
         }
     }
     fun startSearch() {
@@ -254,7 +254,7 @@ fun App(resume: Int = 0) {
         scope.launch {
             val ok = lock.withLock { withContext(Dispatchers.IO) { Store.rename(ctx, current, r, n) } }
             tick++
-            if (!ok) toast("Ad değiştirilemedi (aynı adda öğe olabilir)")
+            if (!ok) toast(L("Ad değiştirilemedi (aynı adda öğe olabilir)", "Could not rename (an item with that name may exist)"))
         }
     }
     LaunchedEffect(rn?.key) { if (rn != null) { delay(100); runCatching { renameFocus.requestFocus() } } }
@@ -265,14 +265,14 @@ fun App(resume: Int = 0) {
                 OutlinedTextField(
                     renameText, { renameText = it.take(maxChars) },
                     modifier = Modifier.fillMaxWidth().focusRequester(renameFocus),
-                    label = { Text(if (rn.isDir) "Klasör adı" else "Yeni ad") },
+                    label = { Text(if (rn.isDir) L("Klasör adı", "Folder name") else L("Yeni ad", "New name")) },
                     singleLine = false, minLines = 1, maxLines = 4,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    TextButton({ renaming = null }) { Text("İptal") }
+                    TextButton({ renaming = null }) { Text(L("İptal", "Cancel")) }
                     Spacer(Modifier.weight(1f))
                     Text("${renameText.length}/$maxChars", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(end = 8.dp))
-                    Button({ saveRename() }, enabled = renameText.isNotBlank()) { Text("Kaydet") }
+                    Button({ saveRename() }, enabled = renameText.isNotBlank()) { Text(L("Kaydet", "Save")) }
                 }
             }
         } else Surface(tonalElevation = 3.dp) {
@@ -280,7 +280,7 @@ fun App(resume: Int = 0) {
                 OutlinedTextField(
                     linkText, { linkText = it },
                     modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("Link veya metin yapıştır (+ uzun bas: .txt)") },
+                    placeholder = { Text(L("Link veya metin yapıştır (+ uzun bas: .txt)", "Paste a link or text (long-press +: .txt)")) },
                     singleLine = false, minLines = 2, maxLines = 8,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -289,9 +289,9 @@ fun App(resume: Int = 0) {
                         Modifier.size(48.dp).clip(CircleShape)
                             .combinedClickable(enabled = canAdd, onClick = { addFromText() }, onLongClick = { addTxt() }),
                         contentAlignment = Alignment.Center
-                    ) { Icon(Icons.Default.Add, "Ekle (uzun bas: .txt)", tint = LocalContentColor.current.copy(alpha = if (canAdd) 1f else 0.38f)) }
-                    IconButton({ startSearch() }, enabled = linkText.isNotBlank()) { Icon(Icons.Default.Search, "Ara") }
-                    IconButton({ clipboard.getText()?.text?.let { linkText = it } }) { Icon(Icons.Default.ContentPaste, "Yapıştır") }
+                    ) { Icon(Icons.Default.Add, L("Ekle (uzun bas: .txt)", "Add (long-press: .txt)"), tint = LocalContentColor.current.copy(alpha = if (canAdd) 1f else 0.38f)) }
+                    IconButton({ startSearch() }, enabled = linkText.isNotBlank()) { Icon(Icons.Default.Search, L("Ara", "Search")) }
+                    IconButton({ clipboard.getText()?.text?.let { linkText = it } }) { Icon(Icons.Default.ContentPaste, L("Yapıştır", "Paste")) }
                     Spacer(Modifier.weight(1f))
                     Text("${linkText.length}/$addMax", style = MaterialTheme.typography.labelSmall, color = if (linkText.length > addMax) MaterialTheme.colorScheme.error else Color.Unspecified, modifier = Modifier.padding(end = 8.dp))
                 }
@@ -300,39 +300,39 @@ fun App(resume: Int = 0) {
     }, topBar = {
         if (searchQuery != null) TopAppBar(
             title = {
-                Text("“$searchQuery”" + (hits?.let { " · ${it.size} sonuç" } ?: ""), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("“$searchQuery”" + (hits?.let { " · ${it.size} " + L("sonuç", "results") } ?: ""), maxLines = 1, overflow = TextOverflow.Ellipsis)
             },
-            navigationIcon = { IconButton({ exitSearch(true) }) { Icon(Icons.Default.ArrowBack, "Aramadan çık") } })
+            navigationIcon = { IconButton({ exitSearch(true) }) { Icon(Icons.Default.ArrowBack, L("Aramadan çık", "Exit search")) } })
         else TopAppBar(
             title = {
                 Text(
-                    if (editMode && selected.isNotEmpty()) "${selected.size} seçili" else if (stack.isEmpty()) "Link Cepte" else stack.last().name,
+                    if (editMode && selected.isNotEmpty()) L("${selected.size} seçili", "${selected.size} selected") else if (stack.isEmpty()) "Link Cepte" else stack.last().name,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
             },
-            navigationIcon = { if (stack.isNotEmpty()) IconButton({ stack = stack.dropLast(1) }) { Icon(Icons.Default.ArrowBack, "Geri") } },
+            navigationIcon = { if (stack.isNotEmpty()) IconButton({ stack = stack.dropLast(1) }) { Icon(Icons.Default.ArrowBack, L("Geri", "Back")) } },
             actions = {
                 if (editMode && selected.isNotEmpty()) {
-                    IconButton({ moving = list.filter { it.key in selected }; dialog = "move" }) { Icon(Icons.Default.DriveFileMove, "Taşı") }
-                    IconButton({ deleteNow(list.filter { it.key in selected }) }) { Icon(Icons.Default.Delete, "Sil") }
+                    IconButton({ moving = list.filter { it.key in selected }; dialog = "move" }) { Icon(Icons.Default.DriveFileMove, L("Taşı", "Move")) }
+                    IconButton({ deleteNow(list.filter { it.key in selected }) }) { Icon(Icons.Default.Delete, L("Sil", "Delete")) }
                 }
-                IconButton({ dialog = "folder" }) { Icon(Icons.Default.CreateNewFolder, "Klasör") }
-                IconButton({ menu = true }) { Icon(Icons.Default.MoreVert, "Menü") }
+                IconButton({ dialog = "folder" }) { Icon(Icons.Default.CreateNewFolder, L("Klasör", "Folder")) }
+                IconButton({ menu = true }) { Icon(Icons.Default.MoreVert, L("Menü", "Menu")) }
                 DropdownMenu(menu, { menu = false }) {
-                    DropdownMenuItem({ Text("Klasörü değiştir") }, { menu = false; pickFolder.launch(null) })
+                    DropdownMenuItem({ Text(L("Klasörü değiştir", "Change folder")) }, { menu = false; pickFolder.launch(null) })
                 }
                 // En sağdaki düzenle tuşu: satırlarda ad değiştirme, taşıma, silme ve sıralama tutamacını açar/kapatır
                 IconButton({ editMode = !editMode; selected = emptySet() }) {
-                    Icon(if (editMode) Icons.Default.Done else Icons.Default.Edit, if (editMode) "Düzenlemeyi bitir" else "Düzenle")
+                    Icon(if (editMode) Icons.Default.Done else Icons.Default.Edit, if (editMode) L("Düzenlemeyi bitir", "Done editing") else L("Düzenle", "Edit"))
                 }
                 // En sağdaki yenile tuşu: kayıtlı klasörü yeniden tarar (başka cihazdan eşitlenen değişiklikleri getirir)
-                IconButton({ tick++; toast("Yenilendi") }) { Icon(Icons.Default.Refresh, "Yenile") }
+                IconButton({ tick++; toast(L("Yenilendi", "Refreshed")) }) { Icon(Icons.Default.Refresh, L("Yenile", "Refresh")) }
             })
     }) { pad ->
         if (searchQuery != null) SearchResults(pad, hits, { open(it) }) { path ->
             exitSearch(true); stack = path
         } else {
         if (loaded != null && list.isEmpty()) Box(Modifier.padding(pad).fillMaxSize().padding(32.dp), Alignment.Center) {
-            Text("Burada henüz bir şey yok. Alttaki alana link veya metin yapıştırın ya da tarayıcıda Paylaş → Link Cepte'yi seçin.")
+            Text(L("Burada henüz bir şey yok. Alttaki alana link veya metin yapıştırın ya da tarayıcıda Paylaş → Link Cepte'yi seçin.", "Nothing here yet. Paste a link or text in the field below, or choose Share → Link Cepte in your browser."))
         }
         LazyColumn(Modifier.padding(pad).fillMaxSize(), state = listState) {
             items(list, key = { it.key }) { e ->
@@ -366,7 +366,7 @@ fun App(resume: Int = 0) {
                             if (editMode) Row(verticalAlignment = Alignment.CenterVertically) {
                                 Checkbox(sel, { selected = if (sel) selected - e.key else selected + e.key })
                                 Icon(
-                                    Icons.Default.DragHandle, "Sürükle",
+                                    Icons.Default.DragHandle, L("Sürükle", "Drag"),
                                     Modifier.size(48.dp).padding(12.dp).pointerInput(e.key) {
                                         detectDragGestures(
                                             onDragStart = { dragStart(e.key) },
@@ -379,7 +379,7 @@ fun App(resume: Int = 0) {
                         },
                         headlineContent = { Text(e.title, maxLines = 4, overflow = TextOverflow.Ellipsis) },
                         trailingContent = {
-                            if (editMode) IconButton({ startRename(e) }, Modifier.size(40.dp)) { Icon(Icons.Default.Edit, "Adı değiştir") }
+                            if (editMode) IconButton({ startRename(e) }, Modifier.size(40.dp)) { Icon(Icons.Default.Edit, L("Adı değiştir", "Rename")) }
                         })
                     HorizontalDivider()
                 }
@@ -392,18 +392,18 @@ fun App(resume: Int = 0) {
         AlertDialog(
             onDismissRequest = { note = null },
             text = { Text(t, modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) },
-            confirmButton = { TextButton({ note = null }) { Text("Kapat") } },
-            dismissButton = { TextButton({ clipboard.setText(AnnotatedString(t)); toast("Kopyalandı") }) { Text("Kopyala") } })
+            confirmButton = { TextButton({ note = null }) { Text(L("Kapat", "Close")) } },
+            dismissButton = { TextButton({ clipboard.setText(AnnotatedString(t)); toast(L("Kopyalandı", "Copied")) }) { Text(L("Kopyala", "Copy")) } })
     }
 
     if (dialog == "folder") {
         var title by remember { mutableStateOf("") }
         AlertDialog(
             onDismissRequest = { dialog = null },
-            title = { Text("Yeni klasör") },
-            text = { OutlinedTextField(title, { title = it }, label = { Text("Klasör adı") }, singleLine = true) },
-            confirmButton = { TextButton({ val n = title; dialog = null; run { Store.addFolder(ctx, current, n) } }, enabled = title.isNotBlank()) { Text("Oluştur") } },
-            dismissButton = { TextButton({ dialog = null }) { Text("İptal") } })
+            title = { Text(L("Yeni klasör", "New folder")) },
+            text = { OutlinedTextField(title, { title = it }, label = { Text(L("Klasör adı", "Folder name")) }, singleLine = true) },
+            confirmButton = { TextButton({ val n = title; dialog = null; run { Store.addFolder(ctx, current, n) } }, enabled = title.isNotBlank()) { Text(L("Oluştur", "Create")) } },
+            dismissButton = { TextButton({ dialog = null }) { Text(L("İptal", "Cancel")) } })
     }
 
     if (dialog == "move") {
@@ -415,7 +415,7 @@ fun App(resume: Int = 0) {
             scope.launch {
                 val ok = lock.withLock { withContext(Dispatchers.IO) { files.count { Store.moveEntry(ctx, it, from, target) } } }
                 tick++
-                toast(if (ok == files.size) "$ok öğe taşındı" else "$ok/${files.size} öğe taşınabildi")
+                toast(if (ok == files.size) L("$ok öğe taşındı", "$ok items moved") else L("$ok/${files.size} öğe taşınabildi", "$ok/${files.size} items could be moved"))
             }
         }
     }
@@ -432,18 +432,18 @@ fun MoveDialog(ctx: android.content.Context, root: Uri, current: Uri, exclude: S
     LaunchedEffect(dir) { folders = withContext(Dispatchers.IO) { Store.list(ctx, dir).filter { it.isDir && it.uri !in exclude } } }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Taşı: " + (stack.lastOrNull()?.name ?: "Ana liste")) },
+        title = { Text(L("Taşı", "Move") + ": " + (stack.lastOrNull()?.name ?: L("Ana liste", "Main list"))) },
         text = {
             LazyColumn(Modifier.heightIn(max = 320.dp)) {
                 if (stack.isNotEmpty()) item {
                     ListItem(modifier = Modifier.clickable { stack = stack.dropLast(1) },
-                        leadingContent = { Icon(Icons.Default.ArrowBack, null) }, headlineContent = { Text("Üst klasör") })
+                        leadingContent = { Icon(Icons.Default.ArrowBack, null) }, headlineContent = { Text(L("Üst klasör", "Parent folder")) })
                 }
                 item {
                     if (!creating) ListItem(modifier = Modifier.clickable { creating = true },
-                        leadingContent = { Icon(Icons.Default.CreateNewFolder, null) }, headlineContent = { Text("Yeni klasör oluştur") })
+                        leadingContent = { Icon(Icons.Default.CreateNewFolder, null) }, headlineContent = { Text(L("Yeni klasör oluştur", "Create new folder")) })
                     else Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedTextField(newName, { newName = it }, label = { Text("Klasör adı") }, singleLine = true, modifier = Modifier.weight(1f))
+                        OutlinedTextField(newName, { newName = it }, label = { Text(L("Klasör adı", "Folder name")) }, singleLine = true, modifier = Modifier.weight(1f))
                         TextButton(enabled = newName.isNotBlank(), onClick = {
                             val n = newName
                             val before = folders.map { it.uri }.toSet()
@@ -453,7 +453,7 @@ fun MoveDialog(ctx: android.content.Context, root: Uri, current: Uri, exclude: S
                                 folders = all
                                 all.firstOrNull { it.uri !in before }?.let { stack = stack + it }
                             }
-                        }) { Text("Oluştur") }
+                        }) { Text(L("Oluştur", "Create")) }
                     }
                 }
                 items(folders, key = { it.key }) { f ->
@@ -462,8 +462,8 @@ fun MoveDialog(ctx: android.content.Context, root: Uri, current: Uri, exclude: S
                 }
             }
         },
-        confirmButton = { TextButton({ onPick(dir) }, enabled = dir != current) { Text("Buraya taşı") } },
-        dismissButton = { TextButton(onDismiss) { Text("İptal") } })
+        confirmButton = { TextButton({ onPick(dir) }, enabled = dir != current) { Text(L("Buraya taşı", "Move here")) } },
+        dismissButton = { TextButton(onDismiss) { Text(L("İptal", "Cancel")) } })
 }
 
 
@@ -472,16 +472,16 @@ fun MoveDialog(ctx: android.content.Context, root: Uri, current: Uri, exclude: S
 fun SearchResults(pad: PaddingValues, hits: List<Hit>?, onOpen: (Entry) -> Unit, onGoto: (List<Entry>) -> Unit) {
     when {
         hits == null -> Box(Modifier.padding(pad).fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
-        hits.isEmpty() -> Box(Modifier.padding(pad).fillMaxSize().padding(32.dp), Alignment.Center) { Text("Sonuç bulunamadı.") }
+        hits.isEmpty() -> Box(Modifier.padding(pad).fillMaxSize().padding(32.dp), Alignment.Center) { Text(L("Sonuç bulunamadı.", "No results found.")) }
         else -> LazyColumn(Modifier.padding(pad).fillMaxSize()) {
             items(hits, key = { it.entry.key }) { h ->
                 ListItem(
                     modifier = Modifier.clickable { onOpen(h.entry) },
-                    overlineContent = { Text(if (h.path.isEmpty()) "Ana liste" else h.path.joinToString(" › ") { it.name }, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    overlineContent = { Text(if (h.path.isEmpty()) L("Ana liste", "Main list") else h.path.joinToString(" › ") { it.name }, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     leadingContent = { Icon(if (h.isNote || h.entry.isTxt) Icons.Default.Description else Icons.Default.Link, null) },
                     headlineContent = { Text(h.entry.title, maxLines = 4, overflow = TextOverflow.Ellipsis) },
                     supportingContent = { if (h.detail.isNotBlank()) Text(h.detail, maxLines = 2, overflow = TextOverflow.Ellipsis) },
-                    trailingContent = { IconButton({ onGoto(h.path) }) { Icon(Icons.Default.FolderOpen, "Klasöre git") } })
+                    trailingContent = { IconButton({ onGoto(h.path) }) { Icon(Icons.Default.FolderOpen, L("Klasöre git", "Go to folder")) } })
                 HorizontalDivider()
             }
         }

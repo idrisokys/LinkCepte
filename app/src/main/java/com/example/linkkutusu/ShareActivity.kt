@@ -14,10 +14,10 @@ class ShareActivity : Activity() {
         Thread {
             val root = Store.root(app)
             val msg = when {
-                text.isBlank() -> "Paylaşılacak bir şey bulunamadı"
-                root == null -> "Önce Link Cepte’yi açıp klasör seçin"
-                Store.addFromText(app, root, text, subject) -> "Kaydedildi"
-                else -> "Kaydedilemedi"
+                text.isBlank() -> L("Paylaşılacak bir şey bulunamadı", "Nothing to share")
+                root == null -> L("Önce Link Cepte’yi açıp klasör seçin", "Open Link Cepte and choose a folder first")
+                Store.addFromText(app, root, text, subject) -> L("Kaydedildi", "Saved")
+                else -> L("Kaydedilemedi", "Could not save")
             }
             runOnUiThread {
                 Toast.makeText(app, msg, Toast.LENGTH_SHORT).show()
