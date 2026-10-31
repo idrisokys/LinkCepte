@@ -26,8 +26,16 @@ done
 iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
 rm -rf "$ICONSET"
 
-# Geçici (ad-hoc) imza: Apple Developer hesabı gerekmez
-codesign --force --deep --sign - "$APP"
+# Paylaş eklentisi (Safari Paylaş menüsü). Derlenemezse uygulama eklentisiz devam eder.
+if bash ./build_share.sh "$APP"; then
+  echo "Paylaş eklentisi eklendi"
+else
+  echo "UYARI: Paylaş eklentisi derlenemedi, uygulama eklentisiz hazırlanıyor"
+  rm -rf "$APP/Contents/PlugIns"
+fi
+
+# Geçici (ad-hoc) imza: Apple Developer hesabı gerekmez (--deep yok: eklentinin kendi imzası korunur)
+codesign --force --sign - "$APP"
 
 ditto -c -k --keepParent "$APP" build/LinkCepte-mac.zip
 echo "Hazır: $(pwd)/$APP"

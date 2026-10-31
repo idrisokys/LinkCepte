@@ -20,7 +20,16 @@
     <!-- Sayfa başlığını almak için; yönlendirmeyle http'ye düşen adreslere de izin verir -->
     <key>NSAppTransportSecurity</key>
     <dict><key>NSAllowsArbitraryLoads</key><true/></dict>
-    <!-- Android'deki "Paylaş → Link Cepte" karşılığı: Servisler menüsü -->
+    <!-- Paylaş eklentisi ana uygulamaya linkcepte://add?t=... ile iletir -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key><string>com.example.linkcepte.mac</string>
+            <key>CFBundleURLSchemes</key>
+            <array><string>linkcepte</string></array>
+        </dict>
+    </array>
+    <!-- Servisler menüsü (Paylaş menüsüne ek yol) -->
     <key>NSServices</key>
     <array>
         <dict>
