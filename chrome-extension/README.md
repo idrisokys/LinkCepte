@@ -5,8 +5,8 @@
 Chrome araç çubuğundaki simgeye tıklayınca açık sekmenin linki Mac'teki **Link Cepte** uygulamasına kaydedilir.
 Başlık otomatik alınır; link, uygulamada seçtiğiniz klasöre `.url` dosyası olarak yazılır.
 
-> Bu klasör **Link Cepte Mac uygulamasının içinde** gelir. Uygulamanın üst araç çubuğundaki **Chrome simgesine**
-> tıklayınca bu klasör Finder'da kendiliğinden açılır.
+> Bu klasör **Link Cepte Mac uygulamasının içinde** gelir. Menü çubuğunda **Link → Chrome Eklentisi Klasörünü Aç**
+> seçeneğine tıklayınca bu klasör Finder'da kendiliğinden açılır.
 
 ## Kurulum (yaklaşık 1 dakika)
 
@@ -15,8 +15,7 @@ Link Cepte'yi **Uygulamalar** klasörüne taşıyıp bir kez açın ve linklerin
 (Bu adım, Chrome'un kullandığı `linkcepte://` adresini sisteme tanıtır.)
 
 **2. Eklenti klasörünü açın**
-Uygulamanın üst araç çubuğundaki **Chrome simgesine** tıklayın (veya menü çubuğundan
-**Link → Chrome Eklentisi Klasörünü Aç**). Finder'da bu klasör açılır.
+Link Cepte'nin menü çubuğunda **Link → Chrome Eklentisi Klasörünü Aç**'a tıklayın. Finder'da bu klasör açılır.
 
 Klasör şu konumda durur:
 `~/Library/Application Support/Link Cepte/chrome-extension`
@@ -48,7 +47,7 @@ Başarılı gönderimde simgede kısa süre **✓**, gönderilemeyen sayfalarda 
 
 ## Güncelleme
 
-Link Cepte uygulamasını yeni sürümle değiştirdikten sonra uygulamadaki **Chrome simgesine** bir kez daha tıklayın
+Link Cepte uygulamasını yeni sürümle değiştirdikten sonra **Link → Chrome Eklentisi Klasörünü Aç**'a bir kez daha tıklayın
 (klasör güncellenir), sonra `chrome://extensions` sayfasında **Link Cepte** kartındaki **↻ (yeniden yükle)** düğmesine basın.
 Eklentiyi yeniden kurmanız gerekmez.
 
@@ -75,8 +74,8 @@ Eklentiyi yeniden kurmanız gerekmez.
 Click the toolbar icon in Chrome to save the current tab's link to the **Link Cepte** Mac app. The page title is fetched
 automatically and the link is written as a `.url` file into the folder you chose in the app.
 
-> This folder is **bundled inside the Link Cepte Mac app**. Click the **Chrome icon** in the app's top toolbar and this
-> folder opens in Finder.
+> This folder is **bundled inside the Link Cepte Mac app**. Choose **Link → Open Chrome Extension Folder** in the menu
+> bar and this folder opens in Finder.
 
 ## Install (about 1 minute)
 
@@ -85,8 +84,7 @@ Move Link Cepte to **Applications**, open it once and choose the folder where li
 (This registers the `linkcepte://` address Chrome uses.)
 
 **2. Open the extension folder**
-Click the **Chrome icon** in the app's top toolbar (or use **Link → Open Chrome Extension Folder** in the menu bar).
-The folder opens in Finder. It lives at:
+In Link Cepte's menu bar choose **Link → Open Chrome Extension Folder**. The folder opens in Finder. It lives at:
 `~/Library/Application Support/Link Cepte/chrome-extension`
 
 **3. Turn on Developer mode in Chrome**
@@ -116,7 +114,7 @@ A **✓** appears briefly on the icon on success, and **!** if the page can't be
 
 ## Updating
 
-After replacing the Link Cepte app with a newer version, click the app's **Chrome icon** once more (this refreshes the
+After replacing the Link Cepte app with a newer version, choose **Link → Open Chrome Extension Folder** once more (this refreshes the
 folder), then press the **↻ (reload)** button on the **Link Cepte** card at `chrome://extensions`. No reinstall needed.
 
 ## Troubleshooting

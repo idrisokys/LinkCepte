@@ -36,7 +36,7 @@ else
   rm -rf "$APP/Contents/PlugIns"
 fi
 
-# Chrome eklentisi: uygulamanın içine konur (araç çubuğundaki Chrome simgesi bu klasörü açar)
+# Chrome eklentisi: uygulamanın içine konur (menü çubuğunda Link → Chrome Eklentisi Klasörünü Aç bu klasörü açar)
 if [ -f ../chrome-extension/manifest.json ]; then
   ditto ../chrome-extension "$APP/Contents/Resources/chrome-extension"
   find "$APP/Contents/Resources/chrome-extension" -name '.DS_Store' -delete

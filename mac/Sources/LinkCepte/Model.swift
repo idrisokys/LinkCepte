@@ -38,6 +38,17 @@ final class Model: ObservableObject {
     @Published var txtSaving = false
     var txtDirty: Bool { txtEditing && txtDraft != txtSaved }
 
+    // Yazı boyutu (punto): liste, arama sonuçları, alt alanlar ve .txt görünümü bunu kullanır; kalıcıdır.
+    static let minFont = 10.0, maxFont = 32.0, defaultFont = 13.0
+    @Published var fontSize: Double = Model.loadFontSize() {
+        didSet { UserDefaults.standard.set(fontSize, forKey: "fontSize") }
+    }
+    private static func loadFontSize() -> Double {
+        let v = UserDefaults.standard.double(forKey: "fontSize")
+        return v == 0 ? defaultFont : min(max(v, minFont), maxFont)
+    }
+    func bumpFont(_ delta: Double) { fontSize = min(max(fontSize + delta, Model.minFont), Model.maxFont) }
+
     let maxChars = 220   // ad değiştirme sınırı
     let addMax = 220     // alttaki ekleme alanı sınırı
 

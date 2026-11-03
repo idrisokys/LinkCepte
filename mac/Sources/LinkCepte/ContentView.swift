@@ -69,11 +69,6 @@ struct MainView: View {
                     Button { m.toggleEdit() } label: { Image(systemName: m.editMode ? "checkmark" : "pencil") }
                         .help(m.editMode ? L("Düzenlemeyi bitir", "Done editing") : L("Düzenle", "Edit"))
                 }
-                // Chrome eklentisinin klasörünü açar (kurulum için içindeki README.md'ye bakın)
-                Button { m.openChromeExtension() } label: {
-                    Image(nsImage: ChromeLogo.image).renderingMode(.original)
-                }
-                .help(L("Chrome eklentisi klasörünü aç", "Open the Chrome extension folder"))
                 // En sağda: kayıtlı klasörü yeniden tarar
                 Button { m.refresh() } label: { Image(systemName: "arrow.clockwise") }
                     .help(L("Yenile (⌘R)", "Refresh (⌘R)"))
@@ -129,7 +124,7 @@ struct MainView: View {
                 Image(systemName: e.isDir ? "folder" : (e.isTxt ? "doc.text" : "link"))
                     .frame(width: 24)
             }
-            Text(e.title).lineLimit(4).truncationMode(.tail)
+            Text(e.title).font(.system(size: m.fontSize)).lineLimit(4).truncationMode(.tail)
             Spacer(minLength: 8)
         }
         .padding(.vertical, 4)
@@ -141,6 +136,22 @@ struct MainView: View {
 
 // MARK: - Alt çubuklar
 
+/// Alt çubuktaki yazı boyutu düğmeleri: A küçük / A büyük (⌘− / ⌘+).
+struct FontSizeButtons: View {
+    @EnvironmentObject var m: Model
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Button { m.bumpFont(-1) } label: { Image(systemName: "textformat.size.smaller") }
+                .disabled(m.fontSize <= Model.minFont)
+                .help(L("Yazıyı küçült (⌘−)", "Smaller text (⌘−)"))
+            Button { m.bumpFont(1) } label: { Image(systemName: "textformat.size.larger") }
+                .disabled(m.fontSize >= Model.maxFont)
+                .help(L("Yazıyı büyüt (⌘+)", "Larger text (⌘+)"))
+        }
+    }
+}
+
 struct AddBar: View {
     @EnvironmentObject var m: Model
 
@@ -149,11 +160,12 @@ struct AddBar: View {
         VStack(alignment: .leading, spacing: 6) {
             ZStack(alignment: .topLeading) {
                 TextEditor(text: $m.linkText)
-                    .font(.body)
+                    .font(.system(size: m.fontSize))
                     .scrollContentBackground(.hidden)
                     .padding(4)
                 if m.linkText.isEmpty {
                     Text(L("Link veya metin yapıştır (+ uzun bas: .txt)", "Paste a link or text (long-press +: .txt)"))
+                        .font(.system(size: m.fontSize))
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 9)
                         .padding(.vertical, 12)
@@ -184,6 +196,7 @@ struct AddBar: View {
                     .help(L("Ara", "Search"))
                 Button { m.paste() } label: { Image(systemName: "doc.on.clipboard") }
                     .help(L("Yapıştır", "Paste"))
+                FontSizeButtons()
                 Spacer()
                 Text("\(m.linkText.count)/\(m.addMax)")
                     .font(.caption)
@@ -203,6 +216,7 @@ struct RenameBar: View {
             TextField(m.renaming?.isDir == true ? L("Klasör adı", "Folder name") : L("Ad", "Name"), text: $m.renameText, axis: .vertical)
                 .lineLimit(1...4)
                 .textFieldStyle(.roundedBorder)
+                .font(.system(size: m.fontSize))
                 .onSubmit { m.saveRename() }
                 .onChange(of: m.renameText) { v in
                     if v.count > m.maxChars { m.renameText = String(v.prefix(m.maxChars)) }
@@ -214,6 +228,7 @@ struct RenameBar: View {
                     .keyboardShortcut("s", modifiers: .command)
                     .disabled(m.renameText.trimmed.isEmpty)
                     .help(L("Kaydet (⌘S)", "Save (⌘S)"))
+                FontSizeButtons()
                 Spacer()
                 Text("\(m.renameText.count)/\(m.maxChars)")
                     .font(.caption)
@@ -254,13 +269,13 @@ struct SearchResultsView: View {
                 .padding(.top, 2)
             VStack(alignment: .leading, spacing: 2) {
                 Text(h.path.isEmpty ? L("Ana liste", "Main list") : h.path.map { $0.name }.joined(separator: " › "))
-                    .font(.caption)
+                    .font(.system(size: max(m.fontSize - 2, 9)))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                Text(h.entry.title).lineLimit(4)
+                Text(h.entry.title).font(.system(size: m.fontSize)).lineLimit(4)
                 if !h.detail.isEmpty {
                     Text(h.detail)
-                        .font(.callout)
+                        .font(.system(size: max(m.fontSize - 1, 9)))
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }

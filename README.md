@@ -59,7 +59,7 @@ If you later pick an old folder again, its links, folders and order come back as
 
 The Mac app uses the same file format, so Android and Mac can use one folder synced with iCloud Drive, Syncthing, Google Drive, etc. It adds a Share-menu entry, a Services-menu entry and drag-and-drop. See [`mac/README.md`](mac/README.md).
 
-The Chrome extension adds a toolbar button: click it and the current tab's link goes straight to the Mac app. The extension is bundled inside the Mac app: click the **Chrome icon** in the app's top toolbar to open its folder, and follow the step-by-step guide in [`chrome-extension/README.md`](chrome-extension/README.md).
+The Chrome extension adds a toolbar button: click it and the current tab's link goes straight to the Mac app. The extension is bundled inside the Mac app: choose **Link → Open Chrome Extension Folder** in the app's menu bar to open its folder, and follow the step-by-step guide in [`chrome-extension/README.md`](chrome-extension/README.md).
 
 ## Backup
 
@@ -162,7 +162,7 @@ Eski bir klasörü sonradan seçerseniz içindeki linkler, klasörler ve sırala
 
 Mac uygulaması aynı dosya biçimini kullanır; Android ve Mac, iCloud Drive, Syncthing, Google Drive gibi bir araçla eşitlenen tek klasörü paylaşabilir. Paylaş menüsü, Servisler menüsü ve sürükle-bırak desteği vardır. Ayrıntı: [`mac/README.md`](mac/README.md).
 
-Chrome eklentisi araç çubuğuna bir düğme ekler: tıklayınca açık sekmenin linki doğrudan Mac uygulamasına gider. Eklenti Mac uygulamasının içinde gelir: uygulamanın üst araç çubuğundaki **Chrome simgesine** tıklayınca klasörü açılır; Chrome'a kurulum adımları [`chrome-extension/README.md`](chrome-extension/README.md) dosyasındadır.
+Chrome eklentisi araç çubuğuna bir düğme ekler: tıklayınca açık sekmenin linki doğrudan Mac uygulamasına gider. Eklenti Mac uygulamasının içinde gelir: menü çubuğundaki **Link → Chrome Eklentisi Klasörünü Aç** ile klasörü açılır; Chrome'a kurulum adımları [`chrome-extension/README.md`](chrome-extension/README.md) dosyasındadır.
 
 ## Yedekleme
 

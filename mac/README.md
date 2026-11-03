@@ -32,6 +32,8 @@ kaydetmek isteyip istemediğiniz sorulur. Dosya adı değişmez, yalnızca içer
 
 **Yenile:** Araç çubuğunun en sağındaki ↻ simgesi (veya ⌘R) kayıtlı klasörü yeniden tarar.
 
+**Yazı boyutu:** Alttaki çubukta, Yapıştır'ın yanındaki **A küçük / A büyük** düğmeleri (veya ⌘− / ⌘+) liste, arama sonuçları, ekleme alanı ve `.txt` görünümündeki yazıyı küçültür/büyütür (10–32 punto). Seçim hatırlanır.
+
 ## Mac'e özgü farklar
 
 | Android | Mac |
@@ -51,7 +53,7 @@ bölümünden *Link Cepte’ye Ekle* kutusunu işaretleyin.
 ## Safari ve Chrome Paylaş menüsü (deneysel)
 
 Uygulamayı **Uygulamalar** klasörüne taşıyıp **bir kez açın**. Sonra Safari'de Paylaş düğmesine basın.
-Chrome'da tek tıkla göndermek için eklenti **uygulamanın içinde** gelir: üst araç çubuğundaki **Chrome simgesine** tıklayın, eklenti klasörü Finder'da açılır (içindeki `README.md` Chrome'a kurulumu adım adım anlatır; menü çubuğunda **Link → Chrome Eklentisi Klasörünü Aç** de aynı işi yapar).
+Chrome'da tek tıkla göndermek için eklenti **uygulamanın içinde** gelir: menü çubuğunda **Link → Chrome Eklentisi Klasörünü Aç**'a tıklayın, eklenti klasörü Finder'da açılır (içindeki `README.md` Chrome'a kurulumu adım adım anlatır).
 *Link Cepte* listede yoksa: Paylaş menüsünün altındaki **Eklentileri Düzenle…** (veya Sistem Ayarları →
 Gizlilik ve Güvenlik → Eklentiler → Paylaşım) bölümünden *Link Cepte* kutusunu işaretleyin.
 Eklenti imzasız (geçici imzalı) olduğu için macOS bunu engelleyebilir; çalışmazsa Servisler menüsü ve
@@ -64,7 +66,8 @@ sürükle-bırak yolları yine kullanılabilir.
 A SwiftUI rewrite of the Android app. It uses the **same file format** (`.url` files, `TEXT=` notes, `.txt`, hidden `.order.txt`),
 so Android and Mac can share one synced folder. The app runs in English unless the device's first language is Turkish.
 The ↻ button at the far right of the toolbar (or ⌘R) rescans the saved folder.
+Text size: the smaller/larger **A** buttons next to Paste in the bottom bar (or ⌘− / ⌘+) resize the text (10–32 pt); the choice is remembered.
 Rename: in edit mode select a single item, change its name in the bottom field and press the 💾 Save icon (⌘S).
 Text files: clicking a `.txt` opens it in the whole window; the pencil (⌘E) edits, the 💾 Save icon (⌘S) saves and returns to reading.
 Share: Safari's Share button, Chrome's *File → Share*, the Services menu, or drag a link into the window.
-Chrome: the extension is bundled in the app. Click the **Chrome icon** in the top toolbar to open its folder in Finder; the `README.md` inside explains how to add it to Chrome.
+Chrome: the extension is bundled in the app. Choose **Link → Open Chrome Extension Folder** in the menu bar to open its folder in Finder; the `README.md` inside explains how to add it to Chrome.

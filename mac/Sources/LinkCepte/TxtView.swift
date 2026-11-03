@@ -10,7 +10,7 @@ struct TxtView: View {
         Group {
             if m.txtEditing {
                 TextEditor(text: $m.txtDraft)
-                    .font(.body)
+                    .font(.system(size: m.fontSize))
                     .scrollContentBackground(.hidden)
                     .padding(12)
                     .focused($focused)
@@ -18,6 +18,7 @@ struct TxtView: View {
             } else {
                 ScrollView {
                     Text(m.txtSaved)
+                        .font(.system(size: m.fontSize))
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(16)
