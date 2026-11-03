@@ -7,7 +7,7 @@ struct ContentView: View {
 
     var body: some View {
         Group {
-            if m.root == nil { WelcomeView() } else { MainView() }
+            if m.root == nil { WelcomeView() } else if m.txt != nil { TxtView() } else { MainView() }
         }
         .frame(minWidth: 420, minHeight: 520)
         .onAppear { m.reload() }
@@ -131,11 +131,6 @@ struct MainView: View {
             }
             Text(e.title).lineLimit(4).truncationMode(.tail)
             Spacer(minLength: 8)
-            if m.editMode {
-                Button { m.startRename(e) } label: { Image(systemName: "pencil") }
-                    .buttonStyle(.borderless)
-                    .help(L("Adı değiştir", "Rename"))
-            }
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())
@@ -202,32 +197,31 @@ struct AddBar: View {
 
 struct RenameBar: View {
     @EnvironmentObject var m: Model
-    @FocusState private var focused: Bool
 
     var body: some View {
         VStack(spacing: 6) {
-            TextField(m.renaming?.isDir == true ? L("Klasör adı", "Folder name") : L("Yeni ad", "New name"), text: $m.renameText, axis: .vertical)
+            TextField(m.renaming?.isDir == true ? L("Klasör adı", "Folder name") : L("Ad", "Name"), text: $m.renameText, axis: .vertical)
                 .lineLimit(1...4)
                 .textFieldStyle(.roundedBorder)
-                .focused($focused)
                 .onSubmit { m.saveRename() }
                 .onChange(of: m.renameText) { v in
                     if v.count > m.maxChars { m.renameText = String(v.prefix(m.maxChars)) }
                 }
-            HStack {
-                Button(L("İptal", "Cancel")) { m.renaming = nil }
+            HStack(spacing: 10) {
+                Button { m.pasteIntoRename() } label: { Image(systemName: "doc.on.clipboard") }
+                    .help(L("Yapıştır", "Paste"))
+                Button { m.saveRename() } label: { Image(systemName: "square.and.arrow.down") }
+                    .keyboardShortcut("s", modifiers: .command)
+                    .disabled(m.renameText.trimmed.isEmpty)
+                    .help(L("Kaydet (⌘S)", "Save (⌘S)"))
                 Spacer()
                 Text("\(m.renameText.count)/\(m.maxChars)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Button(L("Kaydet", "Save")) { m.saveRename() }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(m.renameText.trimmed.isEmpty)
             }
         }
         .padding(8)
         .background(.bar)
-        .onAppear { focused = true }
     }
 }
 

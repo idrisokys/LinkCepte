@@ -211,6 +211,12 @@ enum Store {
         return s
     }
 
+    /// Mevcut .txt dosyasının içeriğini baştan yazar (dosya adı değişmez).
+    static func writePlain(_ url: URL, _ text: String) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        do { try Data(text.utf8).write(to: url, options: .atomic); return true } catch { return false }
+    }
+
     /// Metindeki ilk linki bulur; sondaki noktalama işaretlerini atar.
     static func extractUrl(_ text: String) -> String? {
         guard let r = text.range(of: "https?://\\S+", options: [.regularExpression, .caseInsensitive]) else { return nil }

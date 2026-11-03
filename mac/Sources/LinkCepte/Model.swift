@@ -19,16 +19,24 @@ final class Model: ObservableObject {
     @Published var root: URL? = Store.root
     @Published var stack: [Entry] = []
     @Published var loaded: [Entry]? = nil
-    @Published var editMode = false
-    @Published var selected: Set<String> = []
+    @Published var editMode = false { didSet { syncRename() } }
+    @Published var selected: Set<String> = [] { didSet { syncRename() } }
     @Published var linkText = ""
     @Published var searchQuery: String? = nil
     @Published var hits: [Hit]? = nil
     @Published var sheet: Sheet? = nil
     @Published var noteText = ""
     @Published var moving: [Entry] = []
-    @Published var renaming: Entry? = nil
+    @Published var renaming: Entry? = nil      // düzenleme modunda tek öğe seçiliyse o öğe (adı altta değiştirilir)
     @Published var renameText = ""
+    // Tam pencerede açık .txt dosyası
+    @Published var txt: Entry? = nil
+    @Published var txtSaved = ""               // dosyadaki son hâl
+    @Published var txtDraft = ""               // düzenlenen metin
+    @Published var txtEditing = false
+    @Published var txtAskDiscard = false
+    @Published var txtSaving = false
+    var txtDirty: Bool { txtEditing && txtDraft != txtSaved }
 
     let maxChars = 220   // ad değiştirme sınırı
     let addMax = 220     // alttaki ekleme alanı sınırı
@@ -89,10 +97,56 @@ final class Model: ObservableObject {
     }
 
     func goBack() {
-        if renaming != nil { renaming = nil }
+        if txt != nil { txtBack() }
         else if searchQuery != nil { exitSearch(false) }
         else if editMode { editMode = false; selected = [] }
         else if !stack.isEmpty { setStack(Array(stack.dropLast())) }
+    }
+
+    // MARK: - Metin dosyası (.txt) tam pencere görünümü
+
+    func openTxt(_ e: Entry, _ text: String) {
+        txt = e
+        txtSaved = text
+        txtDraft = text
+        txtEditing = false
+        txtAskDiscard = false
+        txtSaving = false
+    }
+
+    func txtStartEdit() {
+        guard txt != nil, !txtEditing else { return }
+        txtDraft = txtSaved
+        txtEditing = true
+    }
+
+    /// Kaydeder ve okuma görünümüne döner.
+    func txtSave() {
+        guard let e = txt, !txtSaving else { return }
+        let t = txtDraft
+        txtSaving = true
+        Task {
+            let ok = await self.io { Store.writePlain(e.url, t) }
+            self.txtSaving = false
+            if ok {
+                if self.txt?.key == e.key { self.txtSaved = t; self.txtEditing = false; self.txtAskDiscard = false }
+            } else {
+                self.toast(L("Kaydedilemedi", "Couldn't save"))
+            }
+        }
+    }
+
+    func txtDiscard() {
+        txtDraft = txtSaved
+        txtEditing = false
+        txtAskDiscard = false
+    }
+
+    /// Geri: kaydedilmemiş değişiklik varsa sorar; düzenliyorsa okumaya döner; değilse listeye çıkar.
+    func txtBack() {
+        if txtDirty { txtAskDiscard = true }
+        else if txtEditing { txtEditing = false }
+        else { txt = nil }
     }
 
     // MARK: - Chrome eklentisi
@@ -154,6 +208,7 @@ final class Model: ObservableObject {
         if p.runModal() == .OK, let u = p.url {
             if Store.setRoot(u) {
                 root = Store.root
+                txt = nil
                 setStack([])
             } else {
                 toast(L("Bu klasöre yazılamıyor, başka bir klasör seçin", "Can't write to this folder, choose another one"))
@@ -174,6 +229,7 @@ final class Model: ObservableObject {
     }
 
     func toggleEdit() {
+        if txt != nil { txtStartEdit(); return }   // .txt açıkken ⌘E metni düzenler
         editMode.toggle()
         selected = []
     }
@@ -182,7 +238,7 @@ final class Model: ObservableObject {
         Task {
             if e.isTxt {
                 let t = await self.io { Store.readPlain(e.url) }
-                if let t = t { self.noteText = t; self.sheet = .note } else { self.toast(L("Dosya okunamadı", "Couldn't read the file")) }
+                if let t = t { self.openTxt(e, t) } else { self.toast(L("Dosya okunamadı", "Couldn't read the file")) }
                 return
             }
             let (u, t) = await self.io { Store.readLink(e.url) }
@@ -308,16 +364,24 @@ final class Model: ObservableObject {
         }
     }
 
-    func startRename(_ e: Entry) {
-        renameText = e.title
-        renaming = e
+    /// Düzenleme modunda tam bir öğe seçiliyse adı alttaki alanda değiştirilir.
+    private func syncRename() {
+        let e: Entry? = (editMode && selected.count == 1) ? list.first(where: { selected.contains($0.key) }) : nil
+        if e?.key != renaming?.key {
+            renaming = e
+            renameText = e?.title ?? ""
+        }
+    }
+
+    func pasteIntoRename() {
+        if let s = NSPasteboard.general.string(forType: .string) { renameText = String(s.prefix(maxChars)) }
     }
 
     func saveRename() {
         guard let r = renaming, let dir = current else { return }
         let n = renameText
         if n.trimmed.isEmpty { return }
-        renaming = nil
+        selected = []   // seçim kalkınca ad alanı da kapanır; düzenleme modu açık kalır
         Task {
             let ok = await self.io { Store.rename(dir, r, n) }
             self.reload()
