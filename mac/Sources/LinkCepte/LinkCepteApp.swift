@@ -34,6 +34,7 @@ struct LinkCepteApp: App {
                 Divider()
                 Button(L("Klasörü Değiştir…", "Change Folder…")) { model.chooseFolder() }
                     .keyboardShortcut("o", modifiers: .command)
+                Button(L("Chrome Eklentisi Klasörünü Aç", "Open Chrome Extension Folder")) { model.openChromeExtension() }
             }
         }
     }

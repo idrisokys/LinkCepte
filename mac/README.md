@@ -44,7 +44,7 @@ bölümünden *Link Cepte’ye Ekle* kutusunu işaretleyin.
 ## Safari ve Chrome Paylaş menüsü (deneysel)
 
 Uygulamayı **Uygulamalar** klasörüne taşıyıp **bir kez açın**. Sonra Safari'de Paylaş düğmesine basın.
-Chrome'da tek tıkla göndermek için depodaki `chrome-extension/` klasöründeki eklentiyi kurun (kurulum: `chrome-extension/README.md`).
+Chrome'da tek tıkla göndermek için eklenti **uygulamanın içinde** gelir: üst araç çubuğundaki **Chrome simgesine** tıklayın, eklenti klasörü Finder'da açılır (içindeki `README.md` Chrome'a kurulumu adım adım anlatır; menü çubuğunda **Link → Chrome Eklentisi Klasörünü Aç** de aynı işi yapar).
 *Link Cepte* listede yoksa: Paylaş menüsünün altındaki **Eklentileri Düzenle…** (veya Sistem Ayarları →
 Gizlilik ve Güvenlik → Eklentiler → Paylaşım) bölümünden *Link Cepte* kutusunu işaretleyin.
 Eklenti imzasız (geçici imzalı) olduğu için macOS bunu engelleyebilir; çalışmazsa Servisler menüsü ve
@@ -58,3 +58,4 @@ A SwiftUI rewrite of the Android app. It uses the **same file format** (`.url` f
 so Android and Mac can share one synced folder. The app runs in English unless the device's first language is Turkish.
 The ↻ button at the far right of the toolbar (or ⌘R) rescans the saved folder.
 Share: Safari's Share button, Chrome's *File → Share*, the Services menu, or drag a link into the window.
+Chrome: the extension is bundled in the app. Click the **Chrome icon** in the top toolbar to open its folder in Finder; the `README.md` inside explains how to add it to Chrome.

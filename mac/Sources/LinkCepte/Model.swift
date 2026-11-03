@@ -95,6 +95,54 @@ final class Model: ObservableObject {
         else if !stack.isEmpty { setStack(Array(stack.dropLast())) }
     }
 
+    // MARK: - Chrome eklentisi
+
+    /// Uygulamanın içindeki Chrome eklentisini sabit bir klasöre kopyalar ve o klasörü Finder'da açar.
+    /// (Chrome eklentiyi yüklediği klasörden okur; uygulama taşınsa ya da güncellense de yol bozulmasın diye
+    /// kopya `~/Library/Application Support/Link Cepte/chrome-extension` içinde durur.)
+    func openChromeExtension() {
+        let fm = FileManager.default
+        guard let src = Bundle.main.resourceURL?.appendingPathComponent("chrome-extension", isDirectory: true),
+              fm.fileExists(atPath: src.appendingPathComponent("manifest.json").path) else {
+            toast(L("Chrome eklentisi bu uygulama sürümünde bulunamadı", "The Chrome extension isn't included in this app build"))
+            return
+        }
+        var target = src   // kopyalanamazsa uygulamanın içindeki klasör açılır
+        if let base = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            let dst = base.appendingPathComponent("Link Cepte", isDirectory: true)
+                .appendingPathComponent("chrome-extension", isDirectory: true)
+            if Self.syncFolder(src, to: dst) { target = dst }
+        }
+        NSWorkspace.shared.open(target)
+        toast(L("Chrome eklentisi klasörü açıldı — kurulum için README.md’ye bakın",
+                "Chrome extension folder opened — see README.md for setup"))
+    }
+
+    /// Klasörü dosya dosya kopyalar; aynı adlı dosyaların üzerine yazar. Hedef klasör silinmez,
+    /// böylece Chrome'a daha önce yüklenmiş eklenti güncelleme sırasında bozulmaz.
+    private static func syncFolder(_ src: URL, to dst: URL) -> Bool {
+        let fm = FileManager.default
+        do {
+            try fm.createDirectory(at: dst, withIntermediateDirectories: true)
+            guard let en = fm.enumerator(at: src, includingPropertiesForKeys: [.isDirectoryKey]) else { return false }
+            for case let u as URL in en {
+                if u.lastPathComponent == ".DS_Store" { continue }
+                let rel = u.pathComponents.dropFirst(src.pathComponents.count)
+                let out = rel.reduce(dst) { $0.appendingPathComponent($1) }
+                let isDir = try u.resourceValues(forKeys: [.isDirectoryKey]).isDirectory ?? false
+                if isDir {
+                    try fm.createDirectory(at: out, withIntermediateDirectories: true)
+                } else {
+                    if fm.fileExists(atPath: out.path) { try fm.removeItem(at: out) }
+                    try fm.copyItem(at: u, to: out)
+                }
+            }
+            return true
+        } catch {
+            return false
+        }
+    }
+
     func chooseFolder() {
         let p = NSOpenPanel()
         p.canChooseDirectories = true

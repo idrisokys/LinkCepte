@@ -37,6 +37,11 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.style.TextOverflow
@@ -78,11 +83,10 @@ fun App(resume: Int = 0) {
     var selected by remember { mutableStateOf(setOf<String>()) } // düzenleme modunda işaretlenen öğeler
     var moving by remember { mutableStateOf<List<Entry>>(emptyList()) }   // taşınacak öğeler
     var dialog by remember { mutableStateOf<String?>(null) }
-    var renaming by remember { mutableStateOf<Entry?>(null) }
     var renameText by remember { mutableStateOf("") }
-    val renameFocus = remember { FocusRequester() }
     var menu by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf<String?>(null) }
+    var txtDoc by remember { mutableStateOf<Pair<Entry, String>?>(null) }   // tam ekranda açık .txt (öğe, içerik)
     var linkText by remember { mutableStateOf("") }
     var searchQuery by remember { mutableStateOf<String?>(null) }   // null = normal liste
     var hits by remember { mutableStateOf<List<Hit>?>(null) }       // null = aranıyor
@@ -120,11 +124,12 @@ fun App(resume: Int = 0) {
     var loaded by remember(current) { mutableStateOf<List<Entry>?>(null) }
     LaunchedEffect(current, tick, resume) { loaded = withContext(Dispatchers.IO) { Store.list(ctx, current) } }
     val list = loaded ?: emptyList()
-    val rn = renaming   // geçerli ad değiştirme
+    // Düzenleme modunda tam bir öğe seçiliyse adı alttaki geniş alanda değiştirilir
+    val rn: Entry? = if (editMode && selected.size == 1) list.firstOrNull { it.key in selected } else null
+    LaunchedEffect(rn?.key) { renameText = rn?.title ?: "" }
     LaunchedEffect(current) { selected = emptySet() }   // klasör değişince işaretler temizlenir
-    BackHandler(rn != null || searchQuery != null || editMode || stack.isNotEmpty()) {
+    BackHandler(searchQuery != null || editMode || stack.isNotEmpty()) {
         when {
-            rn != null -> renaming = null
             searchQuery != null -> { searchJob?.cancel(); searchQuery = null; hits = null }
             editMode -> { editMode = false; selected = emptySet() }
             else -> stack = stack.dropLast(1)
@@ -190,7 +195,7 @@ fun App(resume: Int = 0) {
         scope.launch {
             if (e.isTxt) {
                 val t = withContext(Dispatchers.IO) { Store.readPlain(ctx, e.uri) }
-                if (t != null) note = t else toast(L("Dosya okunamadı", "Could not read file"))
+                if (t != null) txtDoc = e to t else toast(L("Dosya okunamadı", "Could not read file"))
                 return@launch
             }
             val (u, t) = withContext(Dispatchers.IO) { Store.readLink(ctx, e.uri) }
@@ -244,12 +249,11 @@ fun App(resume: Int = 0) {
         selected = emptySet()
         run { items.forEach { Store.delete(ctx, it.uri) } }
     }
-    fun startRename(e: Entry) { renameText = e.title; renaming = e }
     fun saveRename() {
         val r = rn ?: return
         val n = renameText
         if (n.isBlank()) return
-        renaming = null
+        selected = emptySet()
         focus.clearFocus()
         scope.launch {
             val ok = lock.withLock { withContext(Dispatchers.IO) { Store.rename(ctx, current, r, n) } }
@@ -257,22 +261,24 @@ fun App(resume: Int = 0) {
             if (!ok) toast(L("Ad değiştirilemedi (aynı adda öğe olabilir)", "Could not rename (an item with that name may exist)"))
         }
     }
-    LaunchedEffect(rn?.key) { if (rn != null) { delay(100); runCatching { renameFocus.requestFocus() } } }
 
     Scaffold(bottomBar = {
         if (rn != null) Surface(tonalElevation = 3.dp) {
             Column(Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(horizontal = 8.dp, vertical = 6.dp)) {
                 OutlinedTextField(
                     renameText, { renameText = it.take(maxChars) },
-                    modifier = Modifier.fillMaxWidth().focusRequester(renameFocus),
-                    label = { Text(if (rn.isDir) L("Klasör adı", "Folder name") else L("Yeni ad", "New name")) },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text(if (rn.isDir) L("Klasör adı", "Folder name") else L("Ad", "Name")) },
                     singleLine = false, minLines = 1, maxLines = 4,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    TextButton({ renaming = null }) { Text(L("İptal", "Cancel")) }
+                    IconButton({ clipboard.getText()?.text?.let { renameText = it.take(maxChars) } }) { Icon(Icons.Default.ContentPaste, L("Yapıştır", "Paste")) }
+                    IconButton({ saveRename() }, enabled = renameText.isNotBlank()) {
+                        Icon(Icons.Default.Save, L("Kaydet", "Save"),
+                            tint = if (renameText.isNotBlank()) MaterialTheme.colorScheme.primary else LocalContentColor.current.copy(alpha = 0.38f))
+                    }
                     Spacer(Modifier.weight(1f))
                     Text("${renameText.length}/$maxChars", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(end = 8.dp))
-                    Button({ saveRename() }, enabled = renameText.isNotBlank()) { Text(L("Kaydet", "Save")) }
                 }
             }
         } else Surface(tonalElevation = 3.dp) {
@@ -320,7 +326,7 @@ fun App(resume: Int = 0) {
                 DropdownMenu(menu, { menu = false }) {
                     DropdownMenuItem({ Text(L("Klasörü değiştir", "Change folder")) }, { menu = false; pickFolder.launch(null) })
                 }
-                // En sağdaki düzenle tuşu: satırlarda ad değiştirme, taşıma, silme ve sıralama tutamacını açar/kapatır
+                // Düzenle tuşu: satırlarda seçim kutusu ve sıralama tutamacını açar/kapatır; tek öğe seçilince adı altta değiştirilir
                 IconButton({ editMode = !editMode; selected = emptySet() }) {
                     Icon(if (editMode) Icons.Default.Done else Icons.Default.Edit, if (editMode) L("Düzenlemeyi bitir", "Done editing") else L("Düzenle", "Edit"))
                 }
@@ -377,14 +383,21 @@ fun App(resume: Int = 0) {
                             }
                             else Icon(if (e.isDir) Icons.Default.Folder else if (e.isTxt) Icons.Default.Description else Icons.Default.Link, null)
                         },
-                        headlineContent = { Text(e.title, maxLines = 4, overflow = TextOverflow.Ellipsis) },
-                        trailingContent = {
-                            if (editMode) IconButton({ startRename(e) }, Modifier.size(40.dp)) { Icon(Icons.Default.Edit, L("Adı değiştir", "Rename")) }
-                        })
+                        headlineContent = { Text(e.title, maxLines = 4, overflow = TextOverflow.Ellipsis) })
                     HorizontalDivider()
                 }
             }
         }
+        }
+    }
+
+    txtDoc?.let { (e, text) ->
+        key(e.key) {
+            TxtScreen(
+                title = e.title, initial = text,
+                onSave = { t -> lock.withLock { withContext(Dispatchers.IO) { Store.writePlain(ctx, e.uri, t) } } },
+                onCopy = { t -> clipboard.setText(AnnotatedString(t)); toast(L("Kopyalandı", "Copied")) },
+                onClose = { txtDoc = null })
         }
     }
 
@@ -419,6 +432,93 @@ fun App(resume: Int = 0) {
             }
         }
     }
+}
+
+/** .txt dosyasını tam ekranda gösterir; sağ üstteki kalemle düzenlenir, kaydet ikonuyla kaydedilip okuma görünümüne dönülür. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TxtScreen(
+    title: String, initial: String,
+    onSave: suspend (String) -> Boolean,
+    onCopy: (String) -> Unit,
+    onClose: () -> Unit
+) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var saved by remember { mutableStateOf(initial) }                 // dosyadaki son hâl
+    var editing by remember { mutableStateOf(false) }
+    var value by remember { mutableStateOf(TextFieldValue(initial)) }
+    var saving by remember { mutableStateOf(false) }
+    var askDiscard by remember { mutableStateOf(false) }
+    val focus = remember { FocusRequester() }
+    val dirty = editing && value.text != saved
+
+    fun startEdit() { value = TextFieldValue(saved, TextRange(saved.length)); editing = true }
+    fun save() {
+        if (saving) return
+        saving = true
+        val t = value.text
+        scope.launch {
+            val ok = onSave(t)
+            saving = false
+            if (ok) { saved = t; editing = false; askDiscard = false }
+            else Toast.makeText(ctx, L("Kaydedilemedi", "Could not save"), Toast.LENGTH_SHORT).show()
+        }
+    }
+    fun back() {
+        when {
+            dirty -> askDiscard = true
+            editing -> editing = false
+            else -> onClose()
+        }
+    }
+    LaunchedEffect(editing) { if (editing) { delay(100); runCatching { focus.requestFocus() } } }
+
+    Dialog(onDismissRequest = { back() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(Modifier.fillMaxSize()) {
+            Scaffold(topBar = {
+                TopAppBar(
+                    title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    navigationIcon = { IconButton({ back() }) { Icon(Icons.Default.ArrowBack, L("Geri", "Back")) } },
+                    actions = {
+                        if (editing) {
+                            IconButton({ save() }, enabled = !saving) {
+                                Icon(Icons.Default.Save, L("Kaydet", "Save"), tint = MaterialTheme.colorScheme.primary)
+                            }
+                        } else {
+                            IconButton({ onCopy(saved) }) { Icon(Icons.Default.ContentCopy, L("Kopyala", "Copy")) }
+                            IconButton({ startEdit() }) { Icon(Icons.Default.Edit, L("Düzenle", "Edit")) }
+                        }
+                    })
+            }) { pad ->
+                if (editing) {
+                    TextField(
+                        value, { value = it },
+                        modifier = Modifier.padding(pad).fillMaxSize().imePadding().focusRequester(focus),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,
+                            focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default))
+                } else {
+                    SelectionContainer {
+                        Text(saved, Modifier.padding(pad).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp))
+                    }
+                }
+            }
+        }
+    }
+
+    if (askDiscard) AlertDialog(
+        onDismissRequest = { askDiscard = false },
+        title = { Text(L("Kaydedilmemiş değişiklikler var", "Unsaved changes")) },
+        text = { Text(L("Değişiklikleri kaydetmek ister misiniz?", "Do you want to save your changes?")) },
+        confirmButton = { TextButton({ save() }) { Text(L("Kaydet", "Save")) } },
+        dismissButton = {
+            Row {
+                TextButton({ askDiscard = false }) { Text(L("İptal", "Cancel")) }
+                TextButton({ askDiscard = false; editing = false }) { Text(L("Kaydetme", "Discard")) }
+            }
+        })
 }
 
 @Composable

@@ -36,6 +36,15 @@ else
   rm -rf "$APP/Contents/PlugIns"
 fi
 
+# Chrome eklentisi: uygulamanın içine konur (araç çubuğundaki Chrome simgesi bu klasörü açar)
+if [ -f ../chrome-extension/manifest.json ]; then
+  ditto ../chrome-extension "$APP/Contents/Resources/chrome-extension"
+  find "$APP/Contents/Resources/chrome-extension" -name '.DS_Store' -delete
+  echo "Chrome eklentisi eklendi"
+else
+  echo "UYARI: ../chrome-extension bulunamadı, uygulama Chrome eklentisiz hazırlanıyor"
+fi
+
 # Geçici (ad-hoc) imza: Apple Developer hesabı gerekmez (--deep yok: eklentinin kendi imzası korunur)
 codesign --force --sign - "$APP"
 

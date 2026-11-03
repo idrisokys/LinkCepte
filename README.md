@@ -28,7 +28,7 @@ The apps follow the device language: Turkish if it is Turkish, English otherwise
   URL=https://example.com
   ```
 - **Folders:** organise links in sub-folders.
-- **Edit mode:** the pencil at the top right shows checkboxes, a ☰ drag handle and a rename icon on every row. Select items to get Move and Delete icons.
+- **Edit mode:** the pencil at the top right shows checkboxes, and a ☰ drag handle on every row. Select items to get Move and Delete icons. Select a single item and its name appears in the bottom field: edit it (or paste) and tap the 💾 Save icon next to Paste.
 - **Drag to reorder:** the order is stored in a hidden `.order.txt` file in each folder.
 - **Move:** select one or more items, tap Move, pick a folder (you can create a new one while moving).
 - **Refresh:** the ↻ icon at the far right of the top bar rescans the folder, so changes synced from another device show up right away.
@@ -40,13 +40,14 @@ The apps follow the device language: Turkish if it is Turkish, English otherwise
 |---|---|
 | Add a link | Paste in the bottom field and press **+**, or **Share → Link Cepte** in a browser |
 | Save long text as .txt | Paste it and **long-press +** |
+| Read / edit a .txt | Tap it to open full screen; pencil (top right) to edit, 💾 Save icon to finish |
 | Search | Type words, press **🔍** |
 | Open a link | Tap the row |
 | Enter a folder / go back | Tap the folder row / arrow at the top left |
 | New folder | Folder+ icon at the top |
 | Edit | Pencil icon at the top right |
 | Reorder | In edit mode drag the ☰ handle |
-| Rename | In edit mode, pencil icon on the row |
+| Rename | In edit mode, select one item, change its name in the bottom field and tap the Save icon |
 | Delete | In edit mode select, then trash icon (no confirmation) |
 | Move | In edit mode select → Move icon → pick folder → **Move here** |
 | Change folder | ⋮ menu at the top right → **Change folder** |
@@ -58,7 +59,7 @@ If you later pick an old folder again, its links, folders and order come back as
 
 The Mac app uses the same file format, so Android and Mac can use one folder synced with iCloud Drive, Syncthing, Google Drive, etc. It adds a Share-menu entry, a Services-menu entry and drag-and-drop. See [`mac/README.md`](mac/README.md).
 
-The Chrome extension adds a toolbar button: click it and the current tab's link goes straight to the Mac app. See [`chrome-extension/README.md`](chrome-extension/README.md).
+The Chrome extension adds a toolbar button: click it and the current tab's link goes straight to the Mac app. The extension is bundled inside the Mac app: click the **Chrome icon** in the app's top toolbar to open its folder, and follow the step-by-step guide in [`chrome-extension/README.md`](chrome-extension/README.md).
 
 ## Backup
 
@@ -130,7 +131,7 @@ Uygulamalar cihaz dilini izler: Türkçe ise Türkçe, değilse İngilizce.
   URL=https://ornek.com
   ```
 - **Klasörler:** Linkleri alt klasörlerde düzenleyin.
-- **Düzenleme modu:** Üstte en sağdaki kalem simgesine basınca satırlarda seçim kutusu, ☰ sürükleme tutamacı ve ad değiştirme simgesi görünür. Öğeleri işaretleyince üstte taşı ve sil simgeleri çıkar.
+- **Düzenleme modu:** Üstte en sağdaki kalem simgesine basınca satırlarda seçim kutusu ve ☰ sürükleme tutamacı görünür. Öğeleri işaretleyince üstte taşı ve sil simgeleri çıkar. Tek bir öğe seçince adı alttaki geniş alanda belirir; değiştirip (ya da yapıştırıp) Yapıştır simgesinin yanındaki 💾 Kaydet simgesine basın.
 - **Sürükle-bırak sıralama:** Sıra, her klasördeki gizli `.order.txt` dosyasında tutulur.
 - **Taşıma:** Bir veya birden fazla öğeyi işaretleyip taşı simgesiyle başka bir klasöre aktarın; taşırken **yeni klasör** de oluşturabilirsiniz.
 - **Yenile:** Üst çubuğun en sağındaki ↻ simgesi klasörü yeniden tarar; başka cihazdan eşitlenen değişiklikler hemen görünür.
@@ -142,13 +143,14 @@ Uygulamalar cihaz dilini izler: Türkçe ise Türkçe, değilse İngilizce.
 |---|---|
 | Link eklemek | Alttaki alana yapıştırıp **+**, ya da tarayıcıda **Paylaş → Link Cepte** |
 | Uzun metni .txt kaydetmek | Yapıştırıp **+** simgesine uzun basın |
+| .txt dosyasını okumak / düzenlemek | Dokununca tam ekran açılır; sağ üstteki kalemle düzenleyin, 💾 Kaydet simgesiyle bitirin |
 | Aramak | Kelime yazıp **🔍** |
 | Linki açmak | Satıra dokunun |
 | Klasöre girmek / geri | Klasör satırına dokunun / sol üstteki ok |
 | Yeni klasör | Üstteki klasör+ simgesi |
 | Düzenlemek | Sağ üstteki kalem simgesi |
 | Sıralamak | Düzenleme modunda ☰ tutamacından sürükleyin |
-| Adını değiştirmek | Düzenleme modunda satırdaki kalem simgesi |
+| Adını değiştirmek | Düzenleme modunda öğeyi seçin, alttaki alanda adı değiştirip Kaydet simgesine basın |
 | Silmek | Düzenleme modunda işaretleyip çöp kutusuna basın (onay sorulmaz) |
 | Taşımak | Düzenleme modunda işaretle → taşı simgesi → klasör seç → **Buraya taşı** |
 | Klasörü değiştirmek | Sağ üst ⋮ menüsü → **Klasörü değiştir** |
@@ -160,7 +162,7 @@ Eski bir klasörü sonradan seçerseniz içindeki linkler, klasörler ve sırala
 
 Mac uygulaması aynı dosya biçimini kullanır; Android ve Mac, iCloud Drive, Syncthing, Google Drive gibi bir araçla eşitlenen tek klasörü paylaşabilir. Paylaş menüsü, Servisler menüsü ve sürükle-bırak desteği vardır. Ayrıntı: [`mac/README.md`](mac/README.md).
 
-Chrome eklentisi araç çubuğuna bir düğme ekler: tıklayınca açık sekmenin linki doğrudan Mac uygulamasına gider. Ayrıntı: [`chrome-extension/README.md`](chrome-extension/README.md).
+Chrome eklentisi araç çubuğuna bir düğme ekler: tıklayınca açık sekmenin linki doğrudan Mac uygulamasına gider. Eklenti Mac uygulamasının içinde gelir: uygulamanın üst araç çubuğundaki **Chrome simgesine** tıklayınca klasörü açılır; Chrome'a kurulum adımları [`chrome-extension/README.md`](chrome-extension/README.md) dosyasındadır.
 
 ## Yedekleme
 

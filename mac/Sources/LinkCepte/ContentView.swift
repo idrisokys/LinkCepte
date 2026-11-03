@@ -69,6 +69,11 @@ struct MainView: View {
                     Button { m.toggleEdit() } label: { Image(systemName: m.editMode ? "checkmark" : "pencil") }
                         .help(m.editMode ? L("Düzenlemeyi bitir", "Done editing") : L("Düzenle", "Edit"))
                 }
+                // Chrome eklentisinin klasörünü açar (kurulum için içindeki README.md'ye bakın)
+                Button { m.openChromeExtension() } label: {
+                    Image(nsImage: ChromeLogo.image).renderingMode(.original)
+                }
+                .help(L("Chrome eklentisi klasörünü aç", "Open the Chrome extension folder"))
                 // En sağda: kayıtlı klasörü yeniden tarar
                 Button { m.refresh() } label: { Image(systemName: "arrow.clockwise") }
                     .help(L("Yenile (⌘R)", "Refresh (⌘R)"))

@@ -160,6 +160,13 @@ object Store {
         ctx.contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }?.removePrefix("\uFEFF")
     } catch (e: Exception) { null }
 
+    /** Mevcut .txt dosyasının içeriğini baştan yazar (dosya adı değişmez). */
+    fun writePlain(ctx: Context, uri: Uri, text: String): Boolean = synchronized(mutex) {
+        try {
+            ctx.contentResolver.openOutputStream(uri, "wt")?.use { it.write(text.toByteArray(Charsets.UTF_8)) } != null
+        } catch (e: Exception) { false }
+    }
+
     /** Metindeki ilk linki bulur; sondaki noktalama işaretlerini atar. */
     fun extractUrl(text: String): String? {
         var u = URL_RE.find(text)?.value ?: return null
