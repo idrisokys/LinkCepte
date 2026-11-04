@@ -135,27 +135,38 @@ fun App(resume: Int = 0) {
     val listState = rememberLazyListState()
     val currentDir by rememberUpdatedState(current)
 
-    fun moveSelected(delta: Int) {
-        val key = selected.singleOrNull() ?: return
+    // mode: -1 bir yukarı, 1 bir aşağı, -2 başa al, 2 sona al (seçili tüm öğeler için)
+    fun moveSelected(mode: Int) {
         val l = loaded ?: return
-        val from = l.indexOfFirst { it.key == key }
-        val to = from + delta
-        if (from < 0 || to !in l.indices) return
-        val m = l.toMutableList(); m.add(to, m.removeAt(from))
+        val sel = selected
+        if (sel.isEmpty()) return
+        val m = l.toMutableList()
+        when (mode) {
+            -1 -> for (i in 1 until m.size) if (m[i].key in sel && m[i - 1].key !in sel) { val t = m[i]; m[i] = m[i - 1]; m[i - 1] = t }
+            1 -> for (i in m.size - 2 downTo 0) if (m[i].key in sel && m[i + 1].key !in sel) { val t = m[i]; m[i] = m[i + 1]; m[i + 1] = t }
+            -2 -> { val a = m.filter { it.key in sel }; val b = m.filter { it.key !in sel }; m.clear(); m.addAll(a + b) }
+            2 -> { val a = m.filter { it.key in sel }; val b = m.filter { it.key !in sel }; m.clear(); m.addAll(b + a) }
+        }
+        if (m.map { it.key } == l.map { it.key }) return
         loaded = m
         val names = m.map { it.name }
         val dir = currentDir
         run(reload = false) { Store.saveOrder(ctx, dir, names) }
-        // Taşınan satır ekran dışına çıktıysa görünür kıl
+        // Taşınan öğe ekran dışına çıktıysa görünür kıl
+        val idx = if (mode < 0) m.indexOfFirst { it.key in sel } else m.indexOfLast { it.key in sel }
+        val key = m[idx].key
         scope.launch {
             delay(50)
-            val vis = listState.layoutInfo.visibleItemsInfo
-            val it = vis.firstOrNull { x -> x.key == key }
             val info = listState.layoutInfo
+            val it = info.visibleItemsInfo.firstOrNull { x -> x.key == key }
             if (it == null || it.offset < info.viewportStartOffset || it.offset + it.size > info.viewportEndOffset)
-                listState.animateScrollToItem((to - 1).coerceAtLeast(0))
+                listState.animateScrollToItem((idx - 1).coerceAtLeast(0))
         }
     }
+    // Seçililer zaten en üstte/en altta toplanmışsa ilgili düğme pasif olur
+    val selIdx = list.indices.filter { list[it].key in selected }
+    val canUp = selIdx.withIndex().any { (n, i) -> i != n }
+    val canDown = selIdx.withIndex().any { (n, i) -> i != list.size - selIdx.size + n }
     fun open(e: Entry) {
         scope.launch {
             if (e.isTxt) {
@@ -242,12 +253,16 @@ fun App(resume: Int = 0) {
                         Icon(Icons.Default.Save, L("Kaydet", "Save"),
                             tint = if (renameText.isNotBlank()) MaterialTheme.colorScheme.primary else LocalContentColor.current.copy(alpha = 0.38f))
                     }
-                    val idx = list.indexOfFirst { it.key == rn.key }
-                    IconButton({ moveSelected(-1) }, enabled = idx > 0) { Icon(Icons.Default.KeyboardArrowUp, L("Yukarı taşı", "Move up")) }
-                    IconButton({ moveSelected(1) }, enabled = idx in 0 until list.size - 1) { Icon(Icons.Default.KeyboardArrowDown, L("Aşağı taşı", "Move down")) }
+                    MoveButtons(canUp, canDown) { moveSelected(it) }
                     Spacer(Modifier.weight(1f))
                     Text("${renameText.length}/$maxChars", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(end = 8.dp))
                 }
+            }
+        } else if (editMode && selected.size > 1) Surface(tonalElevation = 3.dp) {
+            Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                MoveButtons(canUp, canDown) { moveSelected(it) }
+                Spacer(Modifier.weight(1f))
+                Text(L("${selected.size} seçili", "${selected.size} selected"), style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(end = 8.dp))
             }
         } else Surface(tonalElevation = 3.dp) {
             Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 8.dp, vertical = 6.dp)) {
@@ -377,6 +392,15 @@ fun App(resume: Int = 0) {
             }
         }
     }
+}
+
+/** Düzenleme modunda seçili öğeler için: başa al, yukarı, aşağı, sona al. */
+@Composable
+fun MoveButtons(canUp: Boolean, canDown: Boolean, onMove: (Int) -> Unit) {
+    IconButton({ onMove(-2) }, enabled = canUp) { Icon(Icons.Default.VerticalAlignTop, L("Başa al", "Move to top")) }
+    IconButton({ onMove(-1) }, enabled = canUp) { Icon(Icons.Default.KeyboardArrowUp, L("Yukarı taşı", "Move up")) }
+    IconButton({ onMove(1) }, enabled = canDown) { Icon(Icons.Default.KeyboardArrowDown, L("Aşağı taşı", "Move down")) }
+    IconButton({ onMove(2) }, enabled = canDown) { Icon(Icons.Default.VerticalAlignBottom, L("Sona al", "Move to bottom")) }
 }
 
 /** .txt dosyasını tam ekranda gösterir; sağ üstteki kalemle düzenlenir, kaydet ikonuyla kaydedilip okuma görünümüne dönülür. */
