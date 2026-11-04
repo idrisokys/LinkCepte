@@ -10,7 +10,7 @@ struct ContentView: View {
             if m.root == nil { WelcomeView() } else if m.txt != nil { TxtView() } else { MainView() }
         }
         .frame(minWidth: 420, minHeight: 520)
-        .onAppear { m.reload() }
+        .onAppear { m.reload(); m.installReorderMonitors() }
         // Uygulamaya her dönüşte liste kendiliğinden yenilenir.
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in m.reload() }
         .onExitCommand { m.goBack() }
@@ -93,17 +93,21 @@ struct MainView: View {
 
     @ViewBuilder
     private var listView: some View {
-        List {
-            ForEach(m.list) { e in row(e) }
-        }
-        .listStyle(.inset)
-        .onDrop(of: [rowDragType], delegate: ListDropDelegate(m: m))   // satırların dışına bırakılsa da sıra kaydedilir
-        .overlay {
-            if m.loaded != nil && m.list.isEmpty {
-                Text(L("Burada henüz bir şey yok. Alttaki alana link veya metin yapıştırın, ya da bir linki pencereye sürükleyip bırakın.", "Nothing here yet. Paste a link or text into the box below, or drag a link into the window."))
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.secondary)
-                    .padding(32)
+        ScrollViewReader { proxy in
+            List {
+                ForEach(m.list) { e in row(e) }
+            }
+            .listStyle(.inset)
+            .onChange(of: m.revealTick) { _ in
+                if let k = m.revealKey { proxy.scrollTo(k) }   // taşınan satır görünür kalsın
+            }
+            .overlay {
+                if m.loaded != nil && m.list.isEmpty {
+                    Text(L("Burada henüz bir şey yok. Alttaki alana link veya metin yapıştırın, ya da bir linki pencereye sürükleyip bırakın.", "Nothing here yet. Paste a link or text into the box below, or drag a link into the window."))
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.secondary)
+                        .padding(32)
+                }
             }
         }
     }
@@ -116,9 +120,6 @@ struct MainView: View {
                 Image(systemName: sel ? "checkmark.square.fill" : "square")
                     .foregroundStyle(sel ? Color.accentColor : Color.secondary)
                     .frame(width: 22)
-                Image(systemName: "line.3.horizontal")
-                    .foregroundStyle(.secondary)
-                    .help(L("Sürükleyerek sırala", "Drag to reorder"))
             } else {
                 Image(systemName: e.isDir ? "folder" : (e.isTxt ? "doc.text" : "link"))
                     .frame(width: 24)
@@ -130,63 +131,7 @@ struct MainView: View {
         .contentShape(Rectangle())
         .background(sel ? Color.accentColor.opacity(0.22) : Color.clear)
         .onTapGesture { m.tap(e) }
-        .modifier(ReorderModifier(e: e))
     }
-}
-
-// MARK: - Sıra değiştirme (düzenleme modunda satırı tutup sürükleyin)
-
-/// Yalnızca bu uygulamanın içinde geçerli sürükleme türü (dışarıdan gelen link bırakmalarıyla karışmaz).
-let rowDragType = UTType(exportedAs: "com.linkcepte.row")
-
-private func rowProvider(_ key: String) -> NSItemProvider {
-    let p = NSItemProvider()
-    p.registerDataRepresentation(forTypeIdentifier: rowDragType.identifier, visibility: .ownProcess) { done in
-        done(Data(key.utf8), nil)
-        return nil
-    }
-    return p
-}
-
-/// Düzenleme modunda satırı sürüklenebilir yapar ve üzerine gelinen satırla yer değiştirir.
-struct ReorderModifier: ViewModifier {
-    @EnvironmentObject var m: Model
-    let e: Entry
-
-    func body(content: Content) -> some View {
-        if m.editMode {
-            content
-                .onDrag({
-                    m.dragKey = e.key
-                    return rowProvider(e.key)
-                }, preview: {
-                    Text(e.title)
-                        .lineLimit(1)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(RoundedRectangle(cornerRadius: 6).fill(.regularMaterial))
-                })
-                .onDrop(of: [rowDragType], delegate: RowDropDelegate(target: e, m: m))
-        } else {
-            content
-        }
-    }
-}
-
-struct RowDropDelegate: DropDelegate {
-    let target: Entry
-    let m: Model
-    func validateDrop(info: DropInfo) -> Bool { m.dragKey != nil }
-    func dropEntered(info: DropInfo) { m.reorderLive(over: target.key) }
-    func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation: .move) }
-    func performDrop(info: DropInfo) -> Bool { m.commitOrder(); return true }
-}
-
-struct ListDropDelegate: DropDelegate {
-    let m: Model
-    func validateDrop(info: DropInfo) -> Bool { m.dragKey != nil }
-    func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation: .move) }
-    func performDrop(info: DropInfo) -> Bool { m.commitOrder(); return true }
 }
 
 // MARK: - Alt çubuklar

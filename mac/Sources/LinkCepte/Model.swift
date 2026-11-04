@@ -427,23 +427,94 @@ final class Model: ObservableObject {
         }
     }
 
-    /// Sürüklenen satırın anahtarı (sıralama sürüklemesi sürerken dolu).
-    @Published var dragKey: String? = nil
+    // MARK: - Sıra değiştirme (düzenleme modunda ↑ / ↓ tuşları veya yukarı-aşağı kaydırma)
 
-    /// Sürükleme sırasında satırı, üzerine gelinen satırın yerine taşır (henüz diske yazmaz).
-    func reorderLive(over targetKey: String) {
-        guard let k = dragKey, k != targetKey, var l = loaded,
-              let from = l.firstIndex(where: { $0.key == k }),
-              let to = l.firstIndex(where: { $0.key == targetKey }) else { return }
-        l.move(fromOffsets: IndexSet(integer: from), toOffset: to > from ? to + 1 : to)
+    /// Son taşınan satır: liste bu satırı görünür tutmak için kaydırılır.
+    @Published var revealKey: String? = nil
+    @Published var revealTick = 0
+    private var eventMonitors: [Any] = []
+    private var scrollArmed = true
+    private var scrollAccum: CGFloat = 0
+    private var lastWheelStep: TimeInterval = 0
+
+    /// İşaretli satır(lar)ı bir adım yukarı (-1) veya aşağı (+1) taşır ve yeni sırayı kaydeder.
+    func moveSelected(_ delta: Int) {
+        guard editMode, !selected.isEmpty, var l = loaded, l.count > 1, let dir = current else { return }
+        var moved = false
+        if delta < 0 {
+            for i in 1..<l.count where selected.contains(l[i].key) && !selected.contains(l[i - 1].key) {
+                l.swapAt(i, i - 1); moved = true
+            }
+        } else {
+            for i in stride(from: l.count - 2, through: 0, by: -1) where selected.contains(l[i].key) && !selected.contains(l[i + 1].key) {
+                l.swapAt(i, i + 1); moved = true
+            }
+        }
+        guard moved else { return }
         loaded = l
-    }
-
-    /// Bırakınca yeni sırayı klasördeki gizli sıra dosyasına yazar.
-    func commitOrder() {
-        dragKey = nil
-        guard let l = loaded, let dir = current else { return }
+        revealKey = (delta < 0 ? l.first(where: { selected.contains($0.key) }) : l.last(where: { selected.contains($0.key) }))?.key
+        revealTick += 1
         let names = l.map { $0.name }
         Task { await self.io { Store.saveOrder(dir, names) } }
+    }
+
+    /// Ok tuşları ve kaydırma olaylarını dinler (bir kez kurulur).
+    func installReorderMonitors() {
+        guard eventMonitors.isEmpty else { return }
+        if let k = NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: { [weak self] ev in
+            guard let self = self else { return ev }
+            return self.handleReorderKey(ev) ? nil : ev
+        }) { eventMonitors.append(k) }
+        if let s = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel, handler: { [weak self] ev in
+            guard let self = self else { return ev }
+            return self.handleReorderScroll(ev) ? nil : ev
+        }) { eventMonitors.append(s) }
+    }
+
+    private var reorderActive: Bool {
+        editMode && !selected.isEmpty && txt == nil && sheet == nil && searchQuery == nil && root != nil
+    }
+
+    private func handleReorderKey(_ ev: NSEvent) -> Bool {
+        guard reorderActive else { return false }
+        // Bir metin alanı odaktaysa ok tuşları imleci taşır
+        if NSApp.keyWindow?.firstResponder is NSTextView { return false }
+        if !ev.modifierFlags.intersection([.command, .option, .control, .shift]).isEmpty { return false }
+        switch ev.keyCode {
+        case 126: moveSelected(-1); return true   // ↑
+        case 125: moveSelected(1); return true    // ↓
+        default: return false
+        }
+    }
+
+    /// Parmak/tekerlek yukarı → satır yukarı, aşağı → aşağı. Bir kaydırma hareketi tek adım sayılır;
+    /// ⌥ basılıyken veya metin alanının üzerindeyken normal kaydırma çalışır.
+    private func handleReorderScroll(_ ev: NSEvent) -> Bool {
+        guard reorderActive, !ev.modifierFlags.contains(.option) else { return false }
+        if let root = ev.window?.contentView?.superview ?? ev.window?.contentView,
+           var v: NSView = root.hitTest(ev.locationInWindow) {
+            while true {
+                if v is NSTextView { return false }
+                guard let p = v.superview else { break }
+                v = p
+            }
+        }
+        let dy = ev.scrollingDeltaY
+        func step(_ amount: CGFloat) {
+            let up = ev.isDirectionInvertedFromDevice ? amount < 0 : amount > 0
+            moveSelected(up ? -1 : 1)
+        }
+        if ev.hasPreciseScrollingDeltas {
+            // Dokunmatik yüzey: her yeni harekette bir kez; hareket ve ivmesi bitene kadar liste kaymaz
+            if ev.phase == .began || ev.phase == .mayBegin { scrollArmed = true; scrollAccum = 0 }
+            if scrollArmed {
+                scrollAccum += dy
+                if abs(scrollAccum) >= 10 { step(scrollAccum); scrollArmed = false }
+            }
+        } else if dy != 0 {
+            // Fare tekerleği: her tık bir adım
+            if ev.timestamp - lastWheelStep > 0.08 { step(dy); lastWheelStep = ev.timestamp }
+        }
+        return true
     }
 }
