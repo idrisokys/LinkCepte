@@ -12,8 +12,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -29,10 +27,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -46,7 +42,6 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -136,59 +131,29 @@ fun App(resume: Int = 0) {
         }
     }
 
-    // ---- Sürükle-bırak: yalnızca sıralama ----
+    // ---- Sıralama: düzenleme modunda seçili satır ok tuşlarıyla yukarı/aşağı taşınır ----
     val listState = rememberLazyListState()
     val currentDir by rememberUpdatedState(current)
-    var dragKey by remember { mutableStateOf<String?>(null) }   // sürüklenen satır
-    var dragY by remember { mutableFloatStateOf(0f) }           // sürüklenen satırın merkezi (liste koordinatı)
-    var startOrder by remember { mutableStateOf(listOf<String>()) }
 
-    fun dragStart(key: String) {
-        val it = listState.layoutInfo.visibleItemsInfo.firstOrNull { x -> x.key == key } ?: return
-        dragKey = key
-        dragY = it.offset + it.size / 2f
-        startOrder = loaded?.map { x -> x.key } ?: emptyList()
-    }
-    fun dragMove(dy: Float) {
-        val key = dragKey ?: return
-        dragY += dy
+    fun moveSelected(delta: Int) {
+        val key = selected.singleOrNull() ?: return
         val l = loaded ?: return
-        val vis = listState.layoutInfo.visibleItemsInfo
         val from = l.indexOfFirst { it.key == key }
-        val me = vis.firstOrNull { it.key == key } ?: return
-        if (from < 0 || me.index != from) return            // yerleşim henüz güncellenmedi
-        val y = dragY.toInt()
-        val over = vis.firstOrNull { it.key != key && y >= it.offset && y < it.offset + it.size } ?: return
-        val frac = (y - over.offset).toFloat() / over.size
-        val down = over.index > from
-        if (!(if (down) frac > 0.5f else frac < 0.5f)) return
-        val m = l.toMutableList(); m.add(over.index, m.removeAt(from)); loaded = m
-    }
-    fun dragEnd(cancel: Boolean) {
-        if (dragKey == null) return
-        dragKey = null
-        val l = loaded ?: return
-        if (cancel) { tick++; return }
-        if (l.map { it.key } != startOrder) {
-            val names = l.map { it.name }
-            val dir = currentDir
-            run(reload = false) { Store.saveOrder(ctx, dir, names) }
-        }
-    }
-    // Liste kenarına yaklaşınca otomatik kaydır
-    LaunchedEffect(dragKey) {
-        while (dragKey != null) {
+        val to = from + delta
+        if (from < 0 || to !in l.indices) return
+        val m = l.toMutableList(); m.add(to, m.removeAt(from))
+        loaded = m
+        val names = m.map { it.name }
+        val dir = currentDir
+        run(reload = false) { Store.saveOrder(ctx, dir, names) }
+        // Taşınan satır ekran dışına çıktıysa görünür kıl
+        scope.launch {
+            delay(50)
+            val vis = listState.layoutInfo.visibleItemsInfo
+            val it = vis.firstOrNull { x -> x.key == key }
             val info = listState.layoutInfo
-            val edge = 120f
-            val top = info.viewportStartOffset + edge
-            val bottom = info.viewportEndOffset - edge
-            val d = when {
-                dragY < top -> -(((top - dragY) / edge) * 24f).coerceIn(4f, 24f)
-                dragY > bottom -> (((dragY - bottom) / edge) * 24f).coerceIn(4f, 24f)
-                else -> 0f
-            }
-            if (d != 0f) { listState.scrollBy(d); dragMove(0f) }
-            delay(16)
+            if (it == null || it.offset < info.viewportStartOffset || it.offset + it.size > info.viewportEndOffset)
+                listState.animateScrollToItem((to - 1).coerceAtLeast(0))
         }
     }
     fun open(e: Entry) {
@@ -277,6 +242,9 @@ fun App(resume: Int = 0) {
                         Icon(Icons.Default.Save, L("Kaydet", "Save"),
                             tint = if (renameText.isNotBlank()) MaterialTheme.colorScheme.primary else LocalContentColor.current.copy(alpha = 0.38f))
                     }
+                    val idx = list.indexOfFirst { it.key == rn.key }
+                    IconButton({ moveSelected(-1) }, enabled = idx > 0) { Icon(Icons.Default.KeyboardArrowUp, L("Yukarı taşı", "Move up")) }
+                    IconButton({ moveSelected(1) }, enabled = idx in 0 until list.size - 1) { Icon(Icons.Default.KeyboardArrowDown, L("Aşağı taşı", "Move down")) }
                     Spacer(Modifier.weight(1f))
                     Text("${renameText.length}/$maxChars", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(end = 8.dp))
                 }
@@ -326,7 +294,7 @@ fun App(resume: Int = 0) {
                 DropdownMenu(menu, { menu = false }) {
                     DropdownMenuItem({ Text(L("Klasörü değiştir", "Change folder")) }, { menu = false; pickFolder.launch(null) })
                 }
-                // Düzenle tuşu: satırlarda seçim kutusu ve sıralama tutamacını açar/kapatır; tek öğe seçilince adı altta değiştirilir
+                // Düzenle tuşu: satırlarda seçim kutusunu açar/kapatır; tek öğe seçilince adı altta değiştirilir, ok tuşlarıyla sırası değiştirilir
                 IconButton({ editMode = !editMode; selected = emptySet() }) {
                     Icon(if (editMode) Icons.Default.Done else Icons.Default.Edit, if (editMode) L("Düzenlemeyi bitir", "Done editing") else L("Düzenle", "Edit"))
                 }
@@ -342,19 +310,8 @@ fun App(resume: Int = 0) {
         }
         LazyColumn(Modifier.padding(pad).fillMaxSize(), state = listState) {
             items(list, key = { it.key }) { e ->
-                val dragging = e.key == dragKey
                 val sel = e.key in selected
-                Column(
-                    Modifier
-                        .then(if (dragging) Modifier else Modifier.animateItemPlacement())
-                        .zIndex(if (dragging) 1f else 0f)
-                        .graphicsLayer {
-                            if (dragging) {
-                                val info = listState.layoutInfo.visibleItemsInfo.firstOrNull { x -> x.key == e.key }
-                                if (info != null) translationY = dragY - (info.offset + info.size / 2f)
-                            }
-                        }
-                ) {
+                Column(Modifier.animateItemPlacement()) {
                     ListItem(
                         modifier = Modifier.clickable {
                             when {
@@ -364,23 +321,11 @@ fun App(resume: Int = 0) {
                             }
                         },
                         colors = ListItemDefaults.colors(containerColor = when {
-                            dragging -> MaterialTheme.colorScheme.surfaceVariant
                             sel -> MaterialTheme.colorScheme.secondaryContainer
                             else -> MaterialTheme.colorScheme.surface
                         }),
                         leadingContent = {
-                            if (editMode) Row(verticalAlignment = Alignment.CenterVertically) {
-                                Checkbox(sel, { selected = if (sel) selected - e.key else selected + e.key })
-                                Icon(
-                                    Icons.Default.DragHandle, L("Sürükle", "Drag"),
-                                    Modifier.size(48.dp).padding(12.dp).pointerInput(e.key) {
-                                        detectDragGestures(
-                                            onDragStart = { dragStart(e.key) },
-                                            onDrag = { change, amount -> change.consume(); dragMove(amount.y) },
-                                            onDragEnd = { dragEnd(false) },
-                                            onDragCancel = { dragEnd(true) })
-                                    })
-                            }
+                            if (editMode) Checkbox(sel, { selected = if (sel) selected - e.key else selected + e.key })
                             else Icon(if (e.isDir) Icons.Default.Folder else if (e.isTxt) Icons.Default.Description else Icons.Default.Link, null)
                         },
                         headlineContent = { Text(e.title, maxLines = 4, overflow = TextOverflow.Ellipsis) })
