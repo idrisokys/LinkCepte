@@ -90,6 +90,7 @@ fun App(resume: Int = 0) {
     val focus = LocalFocusManager.current
 
     var dbxBusy by remember { mutableStateOf(false) }
+    var dbxInfo by remember { mutableStateOf<String?>(null) }   // Dropbox sonuç/hata mesajı (tam metin)
     val maxChars = 220      // ad değiştirme sınırı
     val addMax = 220        // alttaki ekleme alanı sınırı
     fun toast(s: String) = Toast.makeText(ctx, s, Toast.LENGTH_SHORT).show()
@@ -115,7 +116,7 @@ fun App(resume: Int = 0) {
                     L("Dropbox'a yedeklendi ($n dosya)", "Backed up to Dropbox ($n files)")
                 } catch (e: Exception) { L("Yedekleme hatası: ", "Backup error: ") + e.message }
             } }
-            dbxBusy = false; longToast(msg)
+            dbxBusy = false; dbxInfo = msg
         }
     }
     fun dbxRestore() {
@@ -128,7 +129,7 @@ fun App(resume: Int = 0) {
                     L("Geri yüklendi ($n dosya)", "Restored ($n files)")
                 } catch (e: Exception) { L("Geri yükleme hatası: ", "Restore error: ") + e.message }
             } }
-            dbxBusy = false; tick++; longToast(msg)
+            dbxBusy = false; tick++; dbxInfo = msg
         }
     }
 
@@ -430,6 +431,14 @@ fun App(resume: Int = 0) {
             text = { OutlinedTextField(title, { title = it }, label = { Text(L("Klasör adı", "Folder name")) }, singleLine = true) },
             confirmButton = { TextButton({ val n = title; dialog = null; run { Store.addFolder(ctx, current, n) } }, enabled = title.isNotBlank()) { Text(L("Oluştur", "Create")) } },
             dismissButton = { TextButton({ dialog = null }) { Text(L("İptal", "Cancel")) } })
+    }
+
+    dbxInfo?.let { m ->
+        AlertDialog(
+            onDismissRequest = { dbxInfo = null },
+            title = { Text("Dropbox") },
+            text = { androidx.compose.foundation.text.selection.SelectionContainer { Text(m, modifier = Modifier.verticalScroll(rememberScrollState())) } },
+            confirmButton = { TextButton({ dbxInfo = null }) { Text(L("Tamam", "OK")) } })
     }
 
     if (dialog == "restore") AlertDialog(

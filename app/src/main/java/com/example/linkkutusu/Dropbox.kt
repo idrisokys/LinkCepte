@@ -100,7 +100,7 @@ object Dropbox {
                 val err = c.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
                 if (c.responseCode == 409 && err.contains("not_found"))
                     throw IOException(L("Dropbox'ta yedek bulunamadı", "No backup found in Dropbox"))
-                throw IOException("Dropbox ${c.responseCode}: ${err.take(200)}")
+                throw IOException("Dropbox ${c.responseCode}: ${err.take(800)}")
             }
             return c.inputStream.use { it.readBytes() }
         } finally { c.disconnect() }
