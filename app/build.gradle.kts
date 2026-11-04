@@ -1,4 +1,5 @@
 plugins { id("com.android.application"); id("org.jetbrains.kotlin.android") }
+val dropboxKey: String = (project.findProperty("DROPBOX_APP_KEY") as String?)?.trim().orEmpty().ifEmpty { "YOUR_DROPBOX_APP_KEY" }
 android {
     namespace = "com.example.linkkutusu"
     compileSdk = 34
@@ -6,6 +7,8 @@ android {
         applicationId = "com.example.linkkutusu"
         minSdk = 24; targetSdk = 34; versionCode = 2; versionName = "1.1"
         resourceConfigurations += listOf("tr", "en")
+        buildConfigField("String", "DROPBOX_APP_KEY", "\"$dropboxKey\"")
+        manifestPlaceholders["dropboxScheme"] = "db-$dropboxKey"
     }
     buildTypes {
         release {
@@ -15,7 +18,7 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
     composeOptions { kotlinCompilerExtensionVersion = "1.5.14" }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }

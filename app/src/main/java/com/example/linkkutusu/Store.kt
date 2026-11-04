@@ -4,7 +4,12 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.DocumentsContract as DC
+import java.io.InputStream
+import java.io.OutputStream
 import java.net.HttpURLConnection
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 import java.net.URL
 
 data class Entry(val name: String, val uri: Uri, val isDir: Boolean) {
@@ -165,6 +170,66 @@ object Store {
         try {
             ctx.contentResolver.openOutputStream(uri, "wt")?.use { it.write(text.toByteArray(Charsets.UTF_8)) } != null
         } catch (e: Exception) { false }
+    }
+
+    /** Kök klasörün tamamını (alt klasörler ve sıralama dosyaları dahil) zip olarak yazar; dosya sayısını döndürür. */
+    fun exportZip(ctx: Context, out: OutputStream): Int = synchronized(mutex) {
+        val root = root(ctx) ?: return 0
+        var n = 0
+        ZipOutputStream(out).use { z ->
+            fun walk(dir: Uri, prefix: String) {
+                for (e in children(ctx, dir)) {
+                    if (e.isDir) { z.putNextEntry(ZipEntry("$prefix${e.name}/")); z.closeEntry(); walk(e.uri, "$prefix${e.name}/") }
+                    else try {
+                        ctx.contentResolver.openInputStream(e.uri)?.use { i ->
+                            z.putNextEntry(ZipEntry(prefix + e.name)); i.copyTo(z); z.closeEntry(); n++
+                        }
+                    } catch (ex: Exception) { }
+                }
+            }
+            walk(root, "")
+        }
+        n
+    }
+
+    /** Zip içeriğini kök klasöre birleştirir: aynı adlı dosyaların üzerine yazar, mevcut diğer öğeleri silmez. */
+    fun importZip(ctx: Context, input: InputStream): Int = synchronized(mutex) {
+        val root = root(ctx) ?: return 0
+        val dirs = HashMap<String, Uri>().apply { put("", root) }
+        val kids = HashMap<Uri, List<Entry>>()
+        fun kidsOf(d: Uri) = kids.getOrPut(d) { children(ctx, d) }
+        fun dirFor(parts: List<String>): Uri? {
+            var cur = root; var path = ""
+            for (p in parts) {
+                path += "$p/"
+                cur = dirs[path] ?: run {
+                    val found = kidsOf(cur).firstOrNull { it.isDir && it.name == p }?.uri
+                        ?: DC.createDocument(ctx.contentResolver, cur, DC.Document.MIME_TYPE_DIR, p) ?: return null
+                    dirs[path] = found; found
+                }
+            }
+            return cur
+        }
+        var n = 0
+        ZipInputStream(input).use { z ->
+            while (true) {
+                val ze = z.nextEntry ?: break
+                val parts = ze.name.split('/').filter { it.isNotEmpty() }
+                if (parts.isEmpty() || parts.any { it == ".." || it == "." }) continue
+                try {
+                    if (ze.isDirectory) { dirFor(parts); continue }
+                    val bytes = z.readBytes()
+                    if (bytes.size > 20_000_000) continue
+                    val dir = dirFor(parts.dropLast(1)) ?: continue
+                    val name = parts.last()
+                    val old = kidsOf(dir).firstOrNull { !it.isDir && it.name == name }
+                    val f = old?.uri ?: DC.createDocument(ctx.contentResolver, dir, if (name.endsWith(".txt", true)) "text/plain" else OCTET, name) ?: continue
+                    ctx.contentResolver.openOutputStream(f, "wt")?.use { it.write(bytes) } ?: continue
+                    n++
+                } catch (ex: Exception) { }
+            }
+        }
+        n
     }
 
     /** Metindeki ilk linki bulur; sondaki noktalama işaretlerini atar. */

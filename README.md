@@ -186,11 +186,22 @@ Mac uygulaması için **Actions → Build Mac App** çalıştırıp **LinkCepte-
 1. **Open** ile proje klasörünü açın, Gradle senkronizasyonunu bekleyin.
 2. Telefonu bağlayıp ▶ ile çalıştırın.
 
+## Dropbox yedekleme
+
+Menüden (⋮) Dropbox'a bağlandıktan sonra üst çubuktaki ☁↑ tuşu tüm klasörü tek zip olarak yedekler, ☁↓ tuşu en son yedeği geri yükler. Kurulum bir kez yapılır:
+
+1. https://www.dropbox.com/developers/apps → **Create app** → Scoped access → **App folder** → bir ad verin.
+2. **Permissions** sekmesinde `files.content.write` ve `files.content.read` işaretleyip **Submit** deyin.
+3. **Settings** sekmesinde **Redirect URIs** alanına `db-APPKEY://1/connect` yazın (APPKEY yerine uygulamanın App key'i) ve **Add** deyin. **Allow public clients (Implicit Grant & PKCE)** açık olmalı.
+4. `gradle.properties` içindeki `DROPBOX_APP_KEY=` satırına App key'i yazın ve yeniden derleyin.
+
+Yedek, Dropbox'ta `Apps/<uygulama adı>/LinkCepte-yedek.zip` olarak durur. Geri yükleme dosyaları mevcut klasöre ekler, aynı adlıların üzerine yazar, mevcut öğeleri silmez.
+
 ## Teknik bilgiler
 
 - Kotlin + Jetpack Compose (Material 3), en düşük Android 7.0 (API 24)
 - Depolama: Android Storage Access Framework; uygulamaya özel depolama veya geniş depolama izni gerekmez
-- İzinler: yalnızca internet (sayfa başlığını almak için)
+- İzinler: yalnızca internet (sayfa başlığı ve Dropbox yedeği için)
 - Klasör içeriği tek sorguyla okunur, dosya işlemleri arka planda ve sıralı yapılır
 - Derleme: R8 küçültme açık, yalnızca Türkçe ve İngilizce kaynaklar pakete girer
 

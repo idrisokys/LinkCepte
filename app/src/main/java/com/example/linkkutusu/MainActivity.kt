@@ -12,8 +12,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -29,10 +27,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -46,7 +42,6 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -94,11 +89,47 @@ fun App(resume: Int = 0) {
     val clipboard = LocalClipboardManager.current
     val focus = LocalFocusManager.current
 
+    var dbxBusy by remember { mutableStateOf(false) }
     val maxChars = 220      // ad değiştirme sınırı
     val addMax = 220        // alttaki ekleme alanı sınırı
     fun toast(s: String) = Toast.makeText(ctx, s, Toast.LENGTH_SHORT).show()
     fun run(reload: Boolean = true, block: () -> Unit) {
         scope.launch { lock.withLock { withContext(Dispatchers.IO) { block() } }; if (reload) tick++ }
+    }
+
+    fun longToast(s: String) = Toast.makeText(ctx, s, Toast.LENGTH_LONG).show()
+    // Dropbox: yedekle (tüm klasör tek zip) / geri yükle (zip kök klasöre birleştirilir)
+    fun dbxStart() {
+        if (!Dropbox.configured()) longToast(L("Dropbox uygulama anahtarı ayarlanmamış (gradle.properties → DROPBOX_APP_KEY)", "Dropbox app key not set (gradle.properties → DROPBOX_APP_KEY)"))
+        else try { Dropbox.startAuth(ctx) } catch (e: Exception) { longToast(L("Tarayıcı açılamadı", "Could not open browser")) }
+    }
+    fun dbxBackup() {
+        if (dbxBusy) return
+        dbxBusy = true; toast(L("Yedekleniyor…", "Backing up…"))
+        scope.launch {
+            val msg = lock.withLock { withContext(Dispatchers.IO) {
+                try {
+                    val bos = java.io.ByteArrayOutputStream()
+                    val n = Store.exportZip(ctx, bos)
+                    Dropbox.upload(ctx, bos.toByteArray())
+                    L("Dropbox'a yedeklendi ($n dosya)", "Backed up to Dropbox ($n files)")
+                } catch (e: Exception) { L("Yedekleme hatası: ", "Backup error: ") + e.message }
+            } }
+            dbxBusy = false; longToast(msg)
+        }
+    }
+    fun dbxRestore() {
+        if (dbxBusy) return
+        dbxBusy = true; toast(L("Geri yükleniyor…", "Restoring…"))
+        scope.launch {
+            val msg = lock.withLock { withContext(Dispatchers.IO) {
+                try {
+                    val n = Store.importZip(ctx, java.io.ByteArrayInputStream(Dropbox.download(ctx)))
+                    L("Geri yüklendi ($n dosya)", "Restored ($n files)")
+                } catch (e: Exception) { L("Geri yükleme hatası: ", "Restore error: ") + e.message }
+            } }
+            dbxBusy = false; tick++; longToast(msg)
+        }
     }
 
     val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
@@ -136,61 +167,42 @@ fun App(resume: Int = 0) {
         }
     }
 
-    // ---- Sürükle-bırak: yalnızca sıralama ----
+    // ---- Sıralama: düzenleme modunda seçili satır ok tuşlarıyla yukarı/aşağı taşınır ----
     val listState = rememberLazyListState()
     val currentDir by rememberUpdatedState(current)
-    var dragKey by remember { mutableStateOf<String?>(null) }   // sürüklenen satır
-    var dragY by remember { mutableFloatStateOf(0f) }           // sürüklenen satırın merkezi (liste koordinatı)
-    var startOrder by remember { mutableStateOf(listOf<String>()) }
 
-    fun dragStart(key: String) {
-        val it = listState.layoutInfo.visibleItemsInfo.firstOrNull { x -> x.key == key } ?: return
-        dragKey = key
-        dragY = it.offset + it.size / 2f
-        startOrder = loaded?.map { x -> x.key } ?: emptyList()
-    }
-    fun dragMove(dy: Float) {
-        val key = dragKey ?: return
-        dragY += dy
+    // mode: -1 bir yukarı, 1 bir aşağı, -2 başa al, 2 sona al (seçili tüm öğeler için)
+    fun moveSelected(mode: Int) {
         val l = loaded ?: return
-        val vis = listState.layoutInfo.visibleItemsInfo
-        val from = l.indexOfFirst { it.key == key }
-        val me = vis.firstOrNull { it.key == key } ?: return
-        if (from < 0 || me.index != from) return            // yerleşim henüz güncellenmedi
-        val y = dragY.toInt()
-        val over = vis.firstOrNull { it.key != key && y >= it.offset && y < it.offset + it.size } ?: return
-        val frac = (y - over.offset).toFloat() / over.size
-        val down = over.index > from
-        if (!(if (down) frac > 0.5f else frac < 0.5f)) return
-        val m = l.toMutableList(); m.add(over.index, m.removeAt(from)); loaded = m
-    }
-    fun dragEnd(cancel: Boolean) {
-        if (dragKey == null) return
-        dragKey = null
-        val l = loaded ?: return
-        if (cancel) { tick++; return }
-        if (l.map { it.key } != startOrder) {
-            val names = l.map { it.name }
-            val dir = currentDir
-            run(reload = false) { Store.saveOrder(ctx, dir, names) }
+        val sel = selected
+        if (sel.isEmpty()) return
+        val m = l.toMutableList()
+        when (mode) {
+            -1 -> for (i in 1 until m.size) if (m[i].key in sel && m[i - 1].key !in sel) { val t = m[i]; m[i] = m[i - 1]; m[i - 1] = t }
+            1 -> for (i in m.size - 2 downTo 0) if (m[i].key in sel && m[i + 1].key !in sel) { val t = m[i]; m[i] = m[i + 1]; m[i + 1] = t }
+            -2 -> { val a = m.filter { it.key in sel }; val b = m.filter { it.key !in sel }; m.clear(); m.addAll(a + b) }
+            2 -> { val a = m.filter { it.key in sel }; val b = m.filter { it.key !in sel }; m.clear(); m.addAll(b + a) }
         }
-    }
-    // Liste kenarına yaklaşınca otomatik kaydır
-    LaunchedEffect(dragKey) {
-        while (dragKey != null) {
+        if (m.map { it.key } == l.map { it.key }) return
+        loaded = m
+        val names = m.map { it.name }
+        val dir = currentDir
+        run(reload = false) { Store.saveOrder(ctx, dir, names) }
+        // Taşınan öğe ekran dışına çıktıysa görünür kıl
+        val idx = if (mode < 0) m.indexOfFirst { it.key in sel } else m.indexOfLast { it.key in sel }
+        val key = m[idx].key
+        scope.launch {
+            delay(50)
             val info = listState.layoutInfo
-            val edge = 120f
-            val top = info.viewportStartOffset + edge
-            val bottom = info.viewportEndOffset - edge
-            val d = when {
-                dragY < top -> -(((top - dragY) / edge) * 24f).coerceIn(4f, 24f)
-                dragY > bottom -> (((dragY - bottom) / edge) * 24f).coerceIn(4f, 24f)
-                else -> 0f
-            }
-            if (d != 0f) { listState.scrollBy(d); dragMove(0f) }
-            delay(16)
+            val it = info.visibleItemsInfo.firstOrNull { x -> x.key == key }
+            if (it == null || it.offset < info.viewportStartOffset || it.offset + it.size > info.viewportEndOffset)
+                listState.animateScrollToItem((idx - 1).coerceAtLeast(0))
         }
     }
+    // Seçililer zaten en üstte/en altta toplanmışsa ilgili düğme pasif olur
+    val selIdx = list.indices.filter { list[it].key in selected }
+    val canUp = selIdx.withIndex().any { (n, i) -> i != n }
+    val canDown = selIdx.withIndex().any { (n, i) -> i != list.size - selIdx.size + n }
     fun open(e: Entry) {
         scope.launch {
             if (e.isTxt) {
@@ -277,9 +289,16 @@ fun App(resume: Int = 0) {
                         Icon(Icons.Default.Save, L("Kaydet", "Save"),
                             tint = if (renameText.isNotBlank()) MaterialTheme.colorScheme.primary else LocalContentColor.current.copy(alpha = 0.38f))
                     }
+                    MoveButtons(canUp, canDown) { moveSelected(it) }
                     Spacer(Modifier.weight(1f))
                     Text("${renameText.length}/$maxChars", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(end = 8.dp))
                 }
+            }
+        } else if (editMode && selected.size > 1) Surface(tonalElevation = 3.dp) {
+            Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                MoveButtons(canUp, canDown) { moveSelected(it) }
+                Spacer(Modifier.weight(1f))
+                Text(L("${selected.size} seçili", "${selected.size} selected"), style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(end = 8.dp))
             }
         } else Surface(tonalElevation = 3.dp) {
             Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 8.dp, vertical = 6.dp)) {
@@ -321,12 +340,18 @@ fun App(resume: Int = 0) {
                     IconButton({ moving = list.filter { it.key in selected }; dialog = "move" }) { Icon(Icons.Default.DriveFileMove, L("Taşı", "Move")) }
                     IconButton({ deleteNow(list.filter { it.key in selected }) }) { Icon(Icons.Default.Delete, L("Sil", "Delete")) }
                 }
+                if (!(editMode && selected.isNotEmpty())) {
+                    IconButton({ if (Dropbox.connected(ctx)) dbxBackup() else dbxStart() }, enabled = !dbxBusy) { Icon(Icons.Default.CloudUpload, L("Dropbox'a yedekle", "Back up to Dropbox")) }
+                    IconButton({ if (Dropbox.connected(ctx)) dialog = "restore" else dbxStart() }, enabled = !dbxBusy) { Icon(Icons.Default.CloudDownload, L("Dropbox'tan geri yükle", "Restore from Dropbox")) }
+                }
                 IconButton({ dialog = "folder" }) { Icon(Icons.Default.CreateNewFolder, L("Klasör", "Folder")) }
                 IconButton({ menu = true }) { Icon(Icons.Default.MoreVert, L("Menü", "Menu")) }
                 DropdownMenu(menu, { menu = false }) {
                     DropdownMenuItem({ Text(L("Klasörü değiştir", "Change folder")) }, { menu = false; pickFolder.launch(null) })
+                    if (!Dropbox.connected(ctx)) DropdownMenuItem({ Text(L("Dropbox'a bağlan", "Connect to Dropbox")) }, { menu = false; dbxStart() })
+                    else DropdownMenuItem({ Text(L("Dropbox bağlantısını kes", "Disconnect Dropbox")) }, { menu = false; scope.launch(Dispatchers.IO) { Dropbox.disconnect(ctx) }; toast(L("Bağlantı kesildi", "Disconnected")) })
                 }
-                // Düzenle tuşu: satırlarda seçim kutusu ve sıralama tutamacını açar/kapatır; tek öğe seçilince adı altta değiştirilir
+                // Düzenle tuşu: satırlarda seçim kutusunu açar/kapatır; tek öğe seçilince adı altta değiştirilir, ok tuşlarıyla sırası değiştirilir
                 IconButton({ editMode = !editMode; selected = emptySet() }) {
                     Icon(if (editMode) Icons.Default.Done else Icons.Default.Edit, if (editMode) L("Düzenlemeyi bitir", "Done editing") else L("Düzenle", "Edit"))
                 }
@@ -342,19 +367,8 @@ fun App(resume: Int = 0) {
         }
         LazyColumn(Modifier.padding(pad).fillMaxSize(), state = listState) {
             items(list, key = { it.key }) { e ->
-                val dragging = e.key == dragKey
                 val sel = e.key in selected
-                Column(
-                    Modifier
-                        .then(if (dragging) Modifier else Modifier.animateItemPlacement())
-                        .zIndex(if (dragging) 1f else 0f)
-                        .graphicsLayer {
-                            if (dragging) {
-                                val info = listState.layoutInfo.visibleItemsInfo.firstOrNull { x -> x.key == e.key }
-                                if (info != null) translationY = dragY - (info.offset + info.size / 2f)
-                            }
-                        }
-                ) {
+                Column(Modifier.animateItemPlacement()) {
                     ListItem(
                         modifier = Modifier.clickable {
                             when {
@@ -364,23 +378,11 @@ fun App(resume: Int = 0) {
                             }
                         },
                         colors = ListItemDefaults.colors(containerColor = when {
-                            dragging -> MaterialTheme.colorScheme.surfaceVariant
                             sel -> MaterialTheme.colorScheme.secondaryContainer
                             else -> MaterialTheme.colorScheme.surface
                         }),
                         leadingContent = {
-                            if (editMode) Row(verticalAlignment = Alignment.CenterVertically) {
-                                Checkbox(sel, { selected = if (sel) selected - e.key else selected + e.key })
-                                Icon(
-                                    Icons.Default.DragHandle, L("Sürükle", "Drag"),
-                                    Modifier.size(48.dp).padding(12.dp).pointerInput(e.key) {
-                                        detectDragGestures(
-                                            onDragStart = { dragStart(e.key) },
-                                            onDrag = { change, amount -> change.consume(); dragMove(amount.y) },
-                                            onDragEnd = { dragEnd(false) },
-                                            onDragCancel = { dragEnd(true) })
-                                    })
-                            }
+                            if (editMode) Checkbox(sel, { selected = if (sel) selected - e.key else selected + e.key })
                             else Icon(if (e.isDir) Icons.Default.Folder else if (e.isTxt) Icons.Default.Description else Icons.Default.Link, null)
                         },
                         headlineContent = { Text(e.title, maxLines = 4, overflow = TextOverflow.Ellipsis) })
@@ -419,6 +421,13 @@ fun App(resume: Int = 0) {
             dismissButton = { TextButton({ dialog = null }) { Text(L("İptal", "Cancel")) } })
     }
 
+    if (dialog == "restore") AlertDialog(
+        onDismissRequest = { dialog = null },
+        title = { Text(L("Dropbox'tan geri yükle", "Restore from Dropbox")) },
+        text = { Text(L("En son yedek mevcut klasöre eklenir; aynı adlı dosyaların ve sıralamaların üzerine yazılır. Mevcut diğer öğeler silinmez.", "The latest backup is added to the current folder; files and ordering with the same name are overwritten. Other existing items are not deleted.")) },
+        confirmButton = { TextButton({ dialog = null; dbxRestore() }) { Text(L("Geri yükle", "Restore")) } },
+        dismissButton = { TextButton({ dialog = null }) { Text(L("İptal", "Cancel")) } })
+
     if (dialog == "move") {
         val files = moving
         val exclude = files.filter { it.isDir }.map { it.uri }.toSet()   // klasör kendi içine taşınamaz
@@ -432,6 +441,15 @@ fun App(resume: Int = 0) {
             }
         }
     }
+}
+
+/** Düzenleme modunda seçili öğeler için: başa al, yukarı, aşağı, sona al. */
+@Composable
+fun MoveButtons(canUp: Boolean, canDown: Boolean, onMove: (Int) -> Unit) {
+    IconButton({ onMove(-2) }, enabled = canUp) { Icon(Icons.Default.VerticalAlignTop, L("Başa al", "Move to top")) }
+    IconButton({ onMove(-1) }, enabled = canUp) { Icon(Icons.Default.KeyboardArrowUp, L("Yukarı taşı", "Move up")) }
+    IconButton({ onMove(1) }, enabled = canDown) { Icon(Icons.Default.KeyboardArrowDown, L("Aşağı taşı", "Move down")) }
+    IconButton({ onMove(2) }, enabled = canDown) { Icon(Icons.Default.VerticalAlignBottom, L("Sona al", "Move to bottom")) }
 }
 
 /** .txt dosyasını tam ekranda gösterir; sağ üstteki kalemle düzenlenir, kaydet ikonuyla kaydedilip okuma görünümüne dönülür. */
