@@ -340,23 +340,34 @@ fun App(resume: Int = 0) {
                     IconButton({ moving = list.filter { it.key in selected }; dialog = "move" }) { Icon(Icons.Default.DriveFileMove, L("Taşı", "Move")) }
                     IconButton({ deleteNow(list.filter { it.key in selected }) }) { Icon(Icons.Default.Delete, L("Sil", "Delete")) }
                 }
-                if (!(editMode && selected.isNotEmpty())) {
-                    IconButton({ if (Dropbox.connected(ctx)) dbxBackup() else dbxStart() }, enabled = !dbxBusy) { Icon(Icons.Default.CloudUpload, L("Dropbox'a yedekle", "Back up to Dropbox")) }
-                    IconButton({ if (Dropbox.connected(ctx)) dialog = "restore" else dbxStart() }, enabled = !dbxBusy) { Icon(Icons.Default.CloudDownload, L("Dropbox'tan geri yükle", "Restore from Dropbox")) }
-                }
                 IconButton({ dialog = "folder" }) { Icon(Icons.Default.CreateNewFolder, L("Klasör", "Folder")) }
-                IconButton({ menu = true }) { Icon(Icons.Default.MoreVert, L("Menü", "Menu")) }
-                DropdownMenu(menu, { menu = false }) {
-                    DropdownMenuItem({ Text(L("Klasörü değiştir", "Change folder")) }, { menu = false; pickFolder.launch(null) })
-                    if (!Dropbox.connected(ctx)) DropdownMenuItem({ Text(L("Dropbox'a bağlan", "Connect to Dropbox")) }, { menu = false; dbxStart() })
-                    else DropdownMenuItem({ Text(L("Dropbox bağlantısını kes", "Disconnect Dropbox")) }, { menu = false; scope.launch(Dispatchers.IO) { Dropbox.disconnect(ctx) }; toast(L("Bağlantı kesildi", "Disconnected")) })
-                }
                 // Düzenle tuşu: satırlarda seçim kutusunu açar/kapatır; tek öğe seçilince adı altta değiştirilir, ok tuşlarıyla sırası değiştirilir
                 IconButton({ editMode = !editMode; selected = emptySet() }) {
                     Icon(if (editMode) Icons.Default.Done else Icons.Default.Edit, if (editMode) L("Düzenlemeyi bitir", "Done editing") else L("Düzenle", "Edit"))
                 }
-                // En sağdaki yenile tuşu: kayıtlı klasörü yeniden tarar (başka cihazdan eşitlenen değişiklikleri getirir)
-                IconButton({ tick++; toast(L("Yenilendi", "Refreshed")) }) { Icon(Icons.Default.Refresh, L("Yenile", "Refresh")) }
+                // En sağdaki üç nokta menüsü: yenile, klasör seç, Dropbox bağlan / yedekle / geri al
+                Box {
+                    IconButton({ menu = true }) { Icon(Icons.Default.MoreVert, L("Menü", "Menu")) }
+                    DropdownMenu(menu, { menu = false }) {
+                        DropdownMenuItem({ Text(L("Yenile", "Refresh")) }, { menu = false; tick++; toast(L("Yenilendi", "Refreshed")) },
+                            leadingIcon = { Icon(Icons.Default.Refresh, null) })
+                        DropdownMenuItem({ Text(L("Klasör seç", "Choose folder")) }, { menu = false; pickFolder.launch(null) },
+                            leadingIcon = { Icon(Icons.Default.FolderOpen, null) })
+                        HorizontalDivider()
+                        if (!Dropbox.connected(ctx)) {
+                            DropdownMenuItem({ Text(L("Dropbox'a bağlan", "Connect to Dropbox")) }, { menu = false; dbxStart() },
+                                leadingIcon = { Icon(Icons.Default.Cloud, null) })
+                        } else {
+                            DropdownMenuItem({ Text(L("Dropbox'a yedekle", "Back up to Dropbox")) }, { menu = false; dbxBackup() },
+                                enabled = !dbxBusy, leadingIcon = { Icon(Icons.Default.CloudUpload, null) })
+                            DropdownMenuItem({ Text(L("Dropbox'tan geri al", "Restore from Dropbox")) }, { menu = false; dialog = "restore" },
+                                enabled = !dbxBusy, leadingIcon = { Icon(Icons.Default.CloudDownload, null) })
+                            DropdownMenuItem({ Text(L("Dropbox bağlantısını kes", "Disconnect Dropbox")) },
+                                { menu = false; scope.launch(Dispatchers.IO) { Dropbox.disconnect(ctx) }; toast(L("Bağlantı kesildi", "Disconnected")) },
+                                leadingIcon = { Icon(Icons.Default.CloudOff, null) })
+                        }
+                    }
+                }
             })
     }) { pad ->
         if (searchQuery != null) SearchResults(pad, hits, { open(it) }) { path ->
@@ -424,7 +435,7 @@ fun App(resume: Int = 0) {
     if (dialog == "restore") AlertDialog(
         onDismissRequest = { dialog = null },
         title = { Text(L("Dropbox'tan geri yükle", "Restore from Dropbox")) },
-        text = { Text(L("En son yedek mevcut klasöre eklenir; aynı adlı dosyaların ve sıralamaların üzerine yazılır. Mevcut diğer öğeler silinmez.", "The latest backup is added to the current folder; files and ordering with the same name are overwritten. Other existing items are not deleted.")) },
+        text = { Text(L("Dropbox'taki yedek mevcut klasöre eklenir. Var olan hiçbir dosya silinmez veya değiştirilmez; yalnızca eksik olanlar getirilir. Aynı adlı ama farklı içerikli dosyalar \"(Dropbox)\" ekiyle ayrı kaydedilir.", "The Dropbox backup is merged into your current folder. No existing file is deleted or changed; only missing items are added. Files with the same name but different content are saved separately with a \"(Dropbox)\" suffix.")) },
         confirmButton = { TextButton({ dialog = null; dbxRestore() }) { Text(L("Geri yükle", "Restore")) } },
         dismissButton = { TextButton({ dialog = null }) { Text(L("İptal", "Cancel")) } })
 

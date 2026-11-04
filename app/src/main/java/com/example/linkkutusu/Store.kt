@@ -192,23 +192,39 @@ object Store {
         n
     }
 
-    /** Zip içeriğini kök klasöre birleştirir: aynı adlı dosyaların üzerine yazar, mevcut diğer öğeleri silmez. */
+    /**
+     * Zip içeriğini kök klasöre GÜVENLİ biçimde birleştirir: mevcut hiçbir dosya silinmez veya değiştirilmez.
+     * - Dosya yoksa oluşturulur.
+     * - Aynı ad ve aynı içerik varsa atlanır.
+     * - Aynı ad ama farklı içerik varsa "ad (Dropbox).uzantı" olarak ayrı kaydedilir.
+     * - Sıralama dosyası (.order.txt) ezilmez; yedekteki eksik satırlar sona eklenir.
+     * Eklenen/birleştirilen dosya sayısını döndürür.
+     */
     fun importZip(ctx: Context, input: InputStream): Int = synchronized(mutex) {
         val root = root(ctx) ?: return 0
         val dirs = HashMap<String, Uri>().apply { put("", root) }
-        val kids = HashMap<Uri, List<Entry>>()
-        fun kidsOf(d: Uri) = kids.getOrPut(d) { children(ctx, d) }
+        val kids = HashMap<Uri, MutableList<Entry>>()
+        fun kidsOf(d: Uri) = kids.getOrPut(d) { children(ctx, d).toMutableList() }
+        fun readBytes(u: Uri): ByteArray? = try { ctx.contentResolver.openInputStream(u)?.use { it.readBytes() } } catch (e: Exception) { null }
         fun dirFor(parts: List<String>): Uri? {
             var cur = root; var path = ""
             for (p in parts) {
                 path += "$p/"
                 cur = dirs[path] ?: run {
                     val found = kidsOf(cur).firstOrNull { it.isDir && it.name == p }?.uri
-                        ?: DC.createDocument(ctx.contentResolver, cur, DC.Document.MIME_TYPE_DIR, p) ?: return null
+                        ?: DC.createDocument(ctx.contentResolver, cur, DC.Document.MIME_TYPE_DIR, p)?.also { kidsOf(cur).add(Entry(p, it, true)) }
+                        ?: return null
                     dirs[path] = found; found
                 }
             }
             return cur
+        }
+        fun create(dir: Uri, name: String, bytes: ByteArray): Boolean {
+            val mime = if (name.endsWith(".txt", true)) "text/plain" else OCTET
+            val f = DC.createDocument(ctx.contentResolver, dir, mime, name) ?: return false
+            ctx.contentResolver.openOutputStream(f, "wt")?.use { it.write(bytes) } ?: return false
+            kidsOf(dir).add(Entry(name, f, false))
+            return true
         }
         var n = 0
         ZipInputStream(input).use { z ->
@@ -222,10 +238,30 @@ object Store {
                     if (bytes.size > 20_000_000) continue
                     val dir = dirFor(parts.dropLast(1)) ?: continue
                     val name = parts.last()
-                    val old = kidsOf(dir).firstOrNull { !it.isDir && it.name == name }
-                    val f = old?.uri ?: DC.createDocument(ctx.contentResolver, dir, if (name.endsWith(".txt", true)) "text/plain" else OCTET, name) ?: continue
-                    ctx.contentResolver.openOutputStream(f, "wt")?.use { it.write(bytes) } ?: continue
-                    n++
+                    val existing = kidsOf(dir).firstOrNull { !it.isDir && it.name.equals(name, true) }
+                    if (existing == null) { if (create(dir, name, bytes)) n++; continue }
+                    val cur = readBytes(existing.uri)
+                    if (cur != null && cur.contentEquals(bytes)) continue          // aynısı zaten var
+                    if (name == ORDER) {                                            // sıralamayı birleştir, ezme
+                        val have = String(cur ?: ByteArray(0)).lines().filter { it.isNotBlank() }
+                        val extra = String(bytes).lines().filter { it.isNotBlank() && it !in have }
+                        if (extra.isNotEmpty()) {
+                            ctx.contentResolver.openOutputStream(existing.uri, "wt")?.use { it.write((have + extra).joinToString("\n").toByteArray()) }
+                            n++
+                        }
+                        continue
+                    }
+                    // Farklı içerik: mevcut dosyaya dokunmadan yanına "(Dropbox)" ekli kopya
+                    val dot = name.lastIndexOf('.').let { if (it > 0) it else name.length }
+                    val base = name.substring(0, dot); val ext = name.substring(dot)
+                    var i = 1
+                    while (i < 100) {
+                        val alt = fitBytes(base, 200) + (if (i == 1) " (Dropbox)" else " (Dropbox $i)") + ext
+                        val ex = kidsOf(dir).firstOrNull { !it.isDir && it.name.equals(alt, true) }
+                        if (ex == null) { if (create(dir, alt, bytes)) n++; break }
+                        if (readBytes(ex.uri)?.contentEquals(bytes) == true) break   // bu kopya da zaten var
+                        i++
+                    }
                 } catch (ex: Exception) { }
             }
         }

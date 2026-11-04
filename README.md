@@ -188,14 +188,14 @@ Mac uygulaması için **Actions → Build Mac App** çalıştırıp **LinkCepte-
 
 ## Dropbox yedekleme
 
-Menüden (⋮) Dropbox'a bağlandıktan sonra üst çubuktaki ☁↑ tuşu tüm klasörü tek zip olarak yedekler, ☁↓ tuşu en son yedeği geri yükler. Kurulum bir kez yapılır:
+Sağ üstteki ⋮ menüsünde şunlar bulunur: **Yenile**, **Klasör seç**, **Dropbox'a bağlan**, **Dropbox'a yedekle** (tüm klasör tek zip olarak yüklenir), **Dropbox'tan geri al** ve **Bağlantıyı kes**. Kurulum bir kez yapılır:
 
 1. https://www.dropbox.com/developers/apps → **Create app** → Scoped access → **App folder** → bir ad verin.
 2. **Permissions** sekmesinde `files.content.write` ve `files.content.read` işaretleyip **Submit** deyin.
 3. **Settings** sekmesinde **Redirect URIs** alanına `db-APPKEY://1/connect` yazın (APPKEY yerine uygulamanın App key'i) ve **Add** deyin. **Allow public clients (Implicit Grant & PKCE)** açık olmalı.
 4. `gradle.properties` içindeki `DROPBOX_APP_KEY=` satırına App key'i yazın ve yeniden derleyin.
 
-Yedek, Dropbox'ta `Apps/<uygulama adı>/LinkCepte-yedek.zip` olarak durur. Geri yükleme dosyaları mevcut klasöre ekler, aynı adlıların üzerine yazar, mevcut öğeleri silmez.
+Yedek, Dropbox'ta `Apps/<uygulama adı>/LinkCepte-yedek.zip` olarak durur. Geri alma mevcut verinize zarar vermez: hiçbir dosya silinmez veya üzerine yazılmaz. Eksik olanlar eklenir, aynı içerik atlanır, aynı adlı ama farklı içerikli dosyalar `ad (Dropbox).url` gibi ayrı kaydedilir, sıralama dosyası ise birleştirilir.
 
 ## Teknik bilgiler
 
