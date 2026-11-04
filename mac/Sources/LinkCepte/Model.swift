@@ -427,11 +427,22 @@ final class Model: ObservableObject {
         }
     }
 
-    /// Sürükle-bırak: yalnızca sıralama.
-    func moveRows(from: IndexSet, to: Int) {
-        guard var l = loaded, let dir = current else { return }
-        l.move(fromOffsets: from, toOffset: to)
+    /// Sürüklenen satırın anahtarı (sıralama sürüklemesi sürerken dolu).
+    @Published var dragKey: String? = nil
+
+    /// Sürükleme sırasında satırı, üzerine gelinen satırın yerine taşır (henüz diske yazmaz).
+    func reorderLive(over targetKey: String) {
+        guard let k = dragKey, k != targetKey, var l = loaded,
+              let from = l.firstIndex(where: { $0.key == k }),
+              let to = l.firstIndex(where: { $0.key == targetKey }) else { return }
+        l.move(fromOffsets: IndexSet(integer: from), toOffset: to > from ? to + 1 : to)
         loaded = l
+    }
+
+    /// Bırakınca yeni sırayı klasördeki gizli sıra dosyasına yazar.
+    func commitOrder() {
+        dragKey = nil
+        guard let l = loaded, let dir = current else { return }
         let names = l.map { $0.name }
         Task { await self.io { Store.saveOrder(dir, names) } }
     }
