@@ -61,17 +61,11 @@ struct MainView: View {
                     }
                     Button { m.sheet = .folder } label: { Image(systemName: "folder.badge.plus") }
                         .help(L("Yeni klasör", "New folder"))
-                    Menu {
-                        Button(L("Klasörü değiştir…", "Change folder…")) { m.chooseFolder() }
-                    } label: { Image(systemName: "ellipsis.circle") }
-                        .menuIndicator(.hidden)
-                        .help(L("Menü", "Menu"))
                     Button { m.toggleEdit() } label: { Image(systemName: m.editMode ? "checkmark" : "pencil") }
                         .help(m.editMode ? L("Düzenlemeyi bitir", "Done editing") : L("Düzenle", "Edit"))
                 }
-                // En sağda: kayıtlı klasörü yeniden tarar
-                Button { m.refresh() } label: { Image(systemName: "arrow.clockwise") }
-                    .help(L("Yenile (⌘R)", "Refresh (⌘R)"))
+                // En sağda: üç noktalı menü (Yenile, Klasör seç, Dropbox bağlantısı / yedekle / geri al)
+                MoreMenu(m: m)
             }
         }
         .sheet(item: $m.sheet) { s in
@@ -131,6 +125,30 @@ struct MainView: View {
         .contentShape(Rectangle())
         .background(sel ? Color.accentColor.opacity(0.22) : Color.clear)
         .onTapGesture { m.tap(e) }
+    }
+}
+
+/// Araç çubuğunun en sağındaki ⋮ menüsü; Android'deki üç nokta menüsüyle aynı seçenekleri taşır.
+struct MoreMenu: View {
+    @ObservedObject var m: Model
+
+    var body: some View {
+        Menu {
+            Button { m.refresh() } label: { Label(L("Yenile", "Refresh"), systemImage: "arrow.clockwise") }
+            Button { m.chooseFolder() } label: { Label(L("Klasör seç…", "Choose folder…"), systemImage: "folder") }
+            Divider()
+            if !m.dbxConnected {
+                Button { m.dbxConnect() } label: { Label(L("Dropbox'a bağlan", "Connect to Dropbox"), systemImage: "icloud") }
+            } else {
+                Button { m.dbxBackup() } label: { Label(L("Dropbox'a yedekle", "Back up to Dropbox"), systemImage: "icloud.and.arrow.up") }
+                    .disabled(m.dbxBusy)
+                Button { m.dbxAskRestore() } label: { Label(L("Dropbox'tan geri al", "Restore from Dropbox"), systemImage: "icloud.and.arrow.down") }
+                    .disabled(m.dbxBusy)
+                Button { m.dbxDisconnect() } label: { Label(L("Dropbox bağlantısını kes", "Disconnect Dropbox"), systemImage: "icloud.slash") }
+            }
+        } label: { Image(systemName: "ellipsis.circle") }
+            .menuIndicator(.hidden)
+            .help(L("Menü", "Menu"))
     }
 }
 

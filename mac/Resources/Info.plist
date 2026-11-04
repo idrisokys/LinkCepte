@@ -6,7 +6,7 @@
     <key>CFBundleLocalizations</key>
     <array><string>tr</string><string>en</string></array>
     <key>CFBundleExecutable</key><string>LinkCepte</string>
-    <key>CFBundleIdentifier</key><string>com.example.linkcepte.mac</string>
+    <key>CFBundleIdentifier</key><string>io.github.idrisokys.linkcepte.mac</string>
     <key>CFBundleName</key><string>Link Cepte</string>
     <key>CFBundleDisplayName</key><string>Link Cepte</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
@@ -24,9 +24,13 @@
     <key>CFBundleURLTypes</key>
     <array>
         <dict>
-            <key>CFBundleURLName</key><string>com.example.linkcepte.mac</string>
+            <key>CFBundleURLName</key><string>io.github.idrisokys.linkcepte.mac</string>
             <key>CFBundleURLSchemes</key>
-            <array><string>linkcepte</string></array>
+            <array>
+                <string>linkcepte</string>
+                <!-- Dropbox girişinden dönüş: db-<APP_KEY>://1/connect (Dropbox.swift içindeki appKey ile aynı olmalı) -->
+                <string>db-01a5zg8oc8aas3c</string>
+            </array>
         </dict>
     </array>
     <!-- Servisler menüsü (Paylaş menüsüne ek yol) -->

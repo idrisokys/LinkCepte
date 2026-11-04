@@ -1,4 +1,4 @@
-package com.example.linkkutusu
+package io.github.idrisokys.linkcepte
 
 import android.content.Context
 import android.content.Intent

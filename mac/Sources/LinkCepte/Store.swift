@@ -60,6 +60,12 @@ enum Store {
     private static let lock = NSRecursiveLock()
     private static let defaults = UserDefaults.standard
 
+    /// Yedekleme gibi çok adımlı işlemlerde diğer dosya işlemlerini beklet (kilit özyinelemelidir).
+    static func locked<T>(_ body: () throws -> T) rethrows -> T {
+        lock.lock(); defer { lock.unlock() }
+        return try body()
+    }
+
     // MARK: - Kök klasör
 
     /// Seçili kök klasör; yoksa veya yazılamıyorsa nil.
@@ -97,7 +103,7 @@ enum Store {
     }
 
     /// Dosya sistemi adı 255 bayt ile sınırlı; ".url" ve " (2)" payı bırakarak bayt cinsinden kısaltır.
-    private static func fitBytes(_ s: String, limit: Int = 240) -> String {
+    static func fitBytes(_ s: String, limit: Int = 240) -> String {
         var bytes = 0
         var out = String.UnicodeScalarView()
         for sc in s.unicodeScalars {

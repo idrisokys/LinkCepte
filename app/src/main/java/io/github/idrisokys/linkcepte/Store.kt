@@ -1,4 +1,4 @@
-package com.example.linkkutusu
+package io.github.idrisokys.linkcepte
 
 import android.content.Context
 import android.content.Intent
@@ -234,8 +234,7 @@ object Store {
                 if (parts.isEmpty() || parts.any { it == ".." || it == "." }) continue
                 try {
                     if (ze.isDirectory) { dirFor(parts); continue }
-                    val bytes = z.readBytes()
-                    if (bytes.size > 20_000_000) continue
+                    val bytes = readLimited(z, 20_000_000) ?: continue
                     val dir = dirFor(parts.dropLast(1)) ?: continue
                     val name = parts.last()
                     val existing = kidsOf(dir).firstOrNull { !it.isDir && it.name.equals(name, true) }
@@ -266,6 +265,21 @@ object Store {
             }
         }
         n
+    }
+
+    /** [max] baytı aşarsa null döner; böylece çok büyük zip girişleri belleği doldurmaz. */
+    private fun readLimited(input: InputStream, max: Int): ByteArray? {
+        val out = java.io.ByteArrayOutputStream()
+        val buf = ByteArray(8192)
+        var total = 0
+        while (true) {
+            val r = input.read(buf)
+            if (r < 0) break
+            total += r
+            if (total > max) return null
+            out.write(buf, 0, r)
+        }
+        return out.toByteArray()
     }
 
     /** Metindeki ilk linki bulur; sondaki noktalama işaretlerini atar. */

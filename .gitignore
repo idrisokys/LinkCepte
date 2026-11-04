@@ -11,3 +11,5 @@ captures/
 *.keystore
 mac/build/
 mac/.build/
+.kotlin/
+.cxx/

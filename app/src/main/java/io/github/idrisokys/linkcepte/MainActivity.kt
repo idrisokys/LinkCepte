@@ -1,4 +1,4 @@
-package com.example.linkkutusu
+package io.github.idrisokys.linkcepte
 
 import android.content.Intent
 import android.net.Uri
@@ -72,6 +72,7 @@ fun App(resume: Int = 0) {
     val scope = rememberCoroutineScope()
     val lock = remember { Mutex() }
     var root by remember { mutableStateOf(Store.root(ctx)) }
+    LaunchedEffect(resume) { root = Store.root(ctx) }   // izin başka yerden kaldırıldıysa klasör seçimi tekrar istenir
     var stack by remember { mutableStateOf(listOf<Entry>()) }
     var tick by remember { mutableIntStateOf(0) }
     var editMode by remember { mutableStateOf(false) }          // üstteki düzenle tuşu
@@ -108,14 +109,14 @@ fun App(resume: Int = 0) {
         if (dbxBusy) return
         dbxBusy = true; toast(L("Yedekleniyor…", "Backing up…"))
         scope.launch {
-            val msg = lock.withLock { withContext(Dispatchers.IO) {
+            val msg = withContext(Dispatchers.IO) {
                 try {
                     val bos = java.io.ByteArrayOutputStream()
-                    val n = Store.exportZip(ctx, bos)
+                    val n = lock.withLock { Store.exportZip(ctx, bos) }   // kilit yalnızca yerel okuma sırasında tutulur
                     Dropbox.upload(ctx, bos.toByteArray())
                     L("Dropbox'a yedeklendi ($n dosya)", "Backed up to Dropbox ($n files)")
-                } catch (e: Exception) { L("Yedekleme hatası: ", "Backup error: ") + e.message }
-            } }
+                } catch (e: Exception) { L("Yedekleme hatası: ", "Backup error: ") + (e.message ?: e.javaClass.simpleName) }
+            }
             dbxBusy = false; dbxInfo = msg
         }
     }
@@ -123,12 +124,13 @@ fun App(resume: Int = 0) {
         if (dbxBusy) return
         dbxBusy = true; toast(L("Geri yükleniyor…", "Restoring…"))
         scope.launch {
-            val msg = lock.withLock { withContext(Dispatchers.IO) {
+            val msg = withContext(Dispatchers.IO) {
                 try {
-                    val n = Store.importZip(ctx, java.io.ByteArrayInputStream(Dropbox.download(ctx)))
+                    val data = Dropbox.download(ctx)                       // indirme kilitsiz
+                    val n = lock.withLock { Store.importZip(ctx, java.io.ByteArrayInputStream(data)) }
                     L("Geri yüklendi ($n dosya)", "Restored ($n files)")
-                } catch (e: Exception) { L("Geri yükleme hatası: ", "Restore error: ") + e.message }
-            } }
+                } catch (e: Exception) { L("Geri yükleme hatası: ", "Restore error: ") + (e.message ?: e.javaClass.simpleName) }
+            }
             dbxBusy = false; tick++; dbxInfo = msg
         }
     }
@@ -364,7 +366,7 @@ fun App(resume: Int = 0) {
                             DropdownMenuItem({ Text(L("Dropbox'tan geri al", "Restore from Dropbox")) }, { menu = false; dialog = "restore" },
                                 enabled = !dbxBusy, leadingIcon = { Icon(Icons.Default.CloudDownload, null) })
                             DropdownMenuItem({ Text(L("Dropbox bağlantısını kes", "Disconnect Dropbox")) },
-                                { menu = false; scope.launch(Dispatchers.IO) { Dropbox.disconnect(ctx) }; toast(L("Bağlantı kesildi", "Disconnected")) },
+                                { menu = false; scope.launch { withContext(Dispatchers.IO) { Dropbox.disconnect(ctx) }; tick++; toast(L("Bağlantı kesildi", "Disconnected")) } },
                                 leadingIcon = { Icon(Icons.Default.CloudOff, null) })
                         }
                     }

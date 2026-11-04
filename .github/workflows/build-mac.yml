@@ -2,10 +2,17 @@ name: Build Mac App
 on:
   push:
     branches: [main]
+    paths: ['mac/**', 'chrome-extension/**', '.github/workflows/build-mac.yml']
   workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: build-mac-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   build:
     runs-on: macos-15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - run: bash mac/build_app.sh
@@ -13,3 +20,4 @@ jobs:
         with:
           name: LinkCepte-mac
           path: mac/build/LinkCepte-mac.zip
+          if-no-files-found: error

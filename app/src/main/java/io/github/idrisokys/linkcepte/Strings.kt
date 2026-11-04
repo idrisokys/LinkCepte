@@ -1,4 +1,4 @@
-package com.example.linkkutusu
+package io.github.idrisokys.linkcepte
 
 import java.util.Locale
 

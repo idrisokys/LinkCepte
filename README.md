@@ -59,6 +59,8 @@ If you later pick an old folder again, its links, folders and order come back as
 
 The Mac app uses the same file format, so Android and Mac can use one folder synced with iCloud Drive, Syncthing, Google Drive, etc. It adds a Share-menu entry, a Services-menu entry and drag-and-drop. See [`mac/README.md`](mac/README.md).
 
+The Mac app also has **Dropbox backup**, identical to Android: the ⋯ menu at the top right holds **Refresh**, **Choose folder**, **Connect to Dropbox**, **Back up to Dropbox**, **Restore from Dropbox** and **Disconnect Dropbox**. It uses the same app key and the same backup file (`LinkCepte-yedek.zip`), so a backup made on Android can be restored on the Mac and vice versa. Restoring never deletes or overwrites anything (same safe merge as Android).
+
 The Chrome extension adds a toolbar button: click it and the current tab's link goes straight to the Mac app. The extension is bundled inside the Mac app: choose **Link → Open Chrome Extension Folder** in the app's menu bar to open its folder, and follow the step-by-step guide in [`chrome-extension/README.md`](chrome-extension/README.md).
 
 ## Backup
@@ -161,6 +163,8 @@ Eski bir klasörü sonradan seçerseniz içindeki linkler, klasörler ve sırala
 ## Mac uygulaması ve Chrome eklentisi
 
 Mac uygulaması aynı dosya biçimini kullanır; Android ve Mac, iCloud Drive, Syncthing, Google Drive gibi bir araçla eşitlenen tek klasörü paylaşabilir. Paylaş menüsü, Servisler menüsü ve sürükle-bırak desteği vardır. Ayrıntı: [`mac/README.md`](mac/README.md).
+
+Mac uygulamasında Android'dekiyle aynı **Dropbox yedekleme** de vardır: sağ üstteki ⋯ menüsünde **Yenile**, **Klasör seç**, **Dropbox'a bağlan**, **Dropbox'a yedekle**, **Dropbox'tan geri al** ve **Dropbox bağlantısını kes** bulunur. Aynı uygulama anahtarı ve aynı yedek dosyası (`LinkCepte-yedek.zip`) kullanıldığı için Android'de alınan yedek Mac'te, Mac'te alınan yedek Android'de geri yüklenebilir. Geri alma hiçbir şeyi silmez veya ezmez (Android'deki gibi güvenli birleştirme).
 
 Chrome eklentisi araç çubuğuna bir düğme ekler: tıklayınca açık sekmenin linki doğrudan Mac uygulamasına gider. Eklenti Mac uygulamasının içinde gelir: menü çubuğundaki **Link → Chrome Eklentisi Klasörünü Aç** ile klasörü açılır; Chrome'a kurulum adımları [`chrome-extension/README.md`](chrome-extension/README.md) dosyasındadır.
 

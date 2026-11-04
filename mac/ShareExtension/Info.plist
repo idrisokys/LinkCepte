@@ -4,7 +4,7 @@
 <dict>
     <key>CFBundleDevelopmentRegion</key><string>en</string>
     <key>CFBundleExecutable</key><string>LinkCepteShare</string>
-    <key>CFBundleIdentifier</key><string>com.example.linkcepte.mac.share</string>
+    <key>CFBundleIdentifier</key><string>io.github.idrisokys.linkcepte.mac.share</string>
     <key>CFBundleName</key><string>Link Cepte</string>
     <key>CFBundleDisplayName</key><string>Link Cepte</string>
     <key>CFBundlePackageType</key><string>XPC!</string>

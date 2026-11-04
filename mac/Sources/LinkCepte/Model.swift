@@ -29,6 +29,8 @@ final class Model: ObservableObject {
     @Published var moving: [Entry] = []
     @Published var renaming: Entry? = nil      // düzenleme modunda tek öğe seçiliyse o öğe (adı altta değiştirilir)
     @Published var renameText = ""
+    @Published var dbxBusy = false                       // Dropbox yedekleme/geri alma sürüyor
+    @Published var dbxConnected = Dropbox.connected      // Dropbox'a bağlı mı (menüdeki seçenekleri belirler)
     // Tam pencerede açık .txt dosyası
     @Published var txt: Entry? = nil
     @Published var txtSaved = ""               // dosyadaki son hâl
@@ -178,9 +180,9 @@ final class Model: ObservableObject {
                 .appendingPathComponent("chrome-extension", isDirectory: true)
             if Self.syncFolder(src, to: dst) { target = dst }
         }
-        NSWorkspace.shared.open(target)
-        toast(L("Chrome eklentisi klasörü açıldı — kurulum için README.md’ye bakın",
-                "Chrome extension folder opened — see README.md for setup"))
+        NSWorkspace.shared.activateFileViewerSelecting([target])   // klasörün içini değil, bulunduğu yeri açar ve klasörü seçili gösterir
+        toast(L("Chrome eklentisi klasörü Finder’da gösterildi — kurulum için README.md’ye bakın",
+                "Chrome extension folder shown in Finder — see README.md for setup"))
     }
 
     /// Klasörü dosya dosya kopyalar; aynı adlı dosyaların üzerine yazar. Hedef klasör silinmez,
