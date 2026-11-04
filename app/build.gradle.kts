@@ -1,5 +1,7 @@
 plugins { id("com.android.application"); id("org.jetbrains.kotlin.android") }
-val dropboxKey: String = (project.findProperty("DROPBOX_APP_KEY") as String?)?.trim().orEmpty().ifEmpty { "YOUR_DROPBOX_APP_KEY" }
+// gradle.properties boş ya da örnek değerde kalsa bile uygulamanın kendi anahtarı kullanılır (App key gizli bilgi değildir)
+val dropboxKey: String = (project.findProperty("DROPBOX_APP_KEY") as String?)?.trim().orEmpty()
+    .let { if (it.isEmpty() || it == "YOUR_DROPBOX_APP_KEY") "01a5zg8oc8aas3c" else it }
 android {
     namespace = "com.example.linkkutusu"
     compileSdk = 34
