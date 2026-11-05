@@ -125,6 +125,7 @@ struct MainView: View {
         .contentShape(Rectangle())
         .background(sel ? Color.accentColor.opacity(0.22) : Color.clear)
         .onTapGesture { m.tap(e) }
+        .onLongPressGesture(minimumDuration: 0.5) { m.copyEntry(e) }
     }
 }
 
@@ -181,8 +182,16 @@ struct AddBar: View {
                     .font(.system(size: m.fontSize))
                     .scrollContentBackground(.hidden)
                     .padding(4)
+                    .onChange(of: m.linkText) { new in
+                        // Enter gönderir (Shift+Enter yeni satır). Yapıştırma birden fazla karakter ekler, etkilenmez.
+                        if new.hasSuffix("\n"), new.count == m.prevLinkCount + 1, !NSEvent.modifierFlags.contains(.shift) {
+                            m.linkText = String(new.dropLast())
+                            m.addFromText()
+                        }
+                        m.prevLinkCount = m.linkText.count
+                    }
                 if m.linkText.isEmpty {
-                    Text(L("Link veya metin yapıştır (+ uzun bas: .txt)", "Paste a link or text (long-press +: .txt)"))
+                    Text(L("Link veya metin yapıştır (Enter: kaydet)", "Paste a link or text (Enter: save)"))
                         .font(.system(size: m.fontSize))
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 9)
@@ -195,6 +204,10 @@ struct AddBar: View {
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.35)))
 
             HStack(spacing: 10) {
+                Text("\(m.linkText.count)/\(m.addMax)")
+                    .font(.caption)
+                    .foregroundStyle(m.linkText.count > m.addMax ? Color.red : Color.secondary)
+                Spacer()
                 Image(systemName: "plus")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.white)
@@ -215,10 +228,6 @@ struct AddBar: View {
                 Button { m.paste() } label: { Image(systemName: "doc.on.clipboard") }
                     .help(L("Yapıştır", "Paste"))
                 FontSizeButtons()
-                Spacer()
-                Text("\(m.linkText.count)/\(m.addMax)")
-                    .font(.caption)
-                    .foregroundStyle(m.linkText.count > m.addMax ? Color.red : Color.secondary)
             }
         }
         .padding(8)
@@ -256,6 +265,10 @@ struct RenameBar: View {
                 if t != v { m.renameText = t }
             }
             HStack(spacing: 10) {
+                Text("\(m.renameText.count)/\(m.maxChars)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
                 Button { m.pasteIntoRename() } label: { Image(systemName: "doc.on.clipboard") }
                     .help(L("Yapıştır", "Paste"))
                 Button { m.saveRename() } label: { Image(systemName: "square.and.arrow.down") }
@@ -263,10 +276,6 @@ struct RenameBar: View {
                     .disabled(m.renameText.trimmed.isEmpty)
                     .help(L("Kaydet (⌘S)", "Save (⌘S)"))
                 FontSizeButtons()
-                Spacer()
-                Text("\(m.renameText.count)/\(m.maxChars)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
             .frame(height: 30)   // ekleme çubuğundaki düğme satırıyla aynı yükseklik
         }

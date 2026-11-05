@@ -40,6 +40,14 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
@@ -220,6 +228,20 @@ fun App(resume: Int = 0) {
             else try { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u))) } catch (ex: Exception) { toast(L("Link açılamadı", "Could not open link")) }
         }
     }
+    // Satıra uzun basınca metni doğrudan panoya kopyalar (.txt: içerik, link: adres, not: metin, klasör: ad)
+    fun copyEntry(e: Entry) {
+        scope.launch {
+            val t: String? = withContext(Dispatchers.IO) {
+                when {
+                    e.isDir -> e.title
+                    e.isTxt -> Store.readPlain(ctx, e.uri)
+                    else -> { val (u, n) = Store.readLink(ctx, e.uri); u ?: n ?: e.title }
+                }
+            }
+            if (t != null) { clipboard.setText(AnnotatedString(t)); toast(L("Kopyalandı", "Copied")) }
+            else toast(L("Kopyalanamadı", "Could not copy"))
+        }
+    }
     fun addTxt() {
         val text = linkText.trim()
         if (text.isEmpty()) return
@@ -234,7 +256,6 @@ fun App(resume: Int = 0) {
     fun addFromText() {
         val text = linkText.trim()
         if (text.isEmpty()) return
-        if (text.length > addMax) { toast(L("$addMax karakteri aşıyor. + simgesine uzun basarak .txt olarak kaydedin", "Over $addMax characters. Long-press + to save as .txt")); return }
         linkText = ""
         focus.clearFocus()
         scope.launch {
@@ -242,6 +263,16 @@ fun App(resume: Int = 0) {
             tick++
             toast(if (ok) L("Eklendi", "Added") else L("Eklenemedi", "Could not add"))
         }
+    }
+    // Gönder / Enter: link ise link olarak, sınırı aşan metin .txt olarak, kısa metin not olarak kaydedilir
+    fun submit() {
+        val text = linkText.trim()
+        if (text.isEmpty()) return
+        val isUrl = Store.extractUrl(text) != null
+        val tooLong = text.length > addMax
+        // Tek parça (boşluksuz) uzun link yine link olarak kaydedilir; diğer uzun metinler .txt olur
+        val singleUrl = isUrl && text.none { it.isWhitespace() }
+        if (tooLong && !singleUrl) addTxt() else addFromText()
     }
     fun startSearch() {
         val q = linkText.trim()
@@ -287,41 +318,45 @@ fun App(resume: Int = 0) {
                     singleLine = false, minLines = 1, maxLines = 4,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("${renameText.length}/$maxChars", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(start = 8.dp))
+                    Spacer(Modifier.weight(1f))
                     IconButton({ clipboard.getText()?.text?.let { renameText = it.take(maxChars) } }) { Icon(Icons.Default.ContentPaste, L("Yapıştır", "Paste")) }
                     IconButton({ saveRename() }, enabled = renameText.isNotBlank()) {
                         Icon(Icons.Default.Save, L("Kaydet", "Save"),
                             tint = if (renameText.isNotBlank()) MaterialTheme.colorScheme.primary else LocalContentColor.current.copy(alpha = 0.38f))
                     }
                     MoveButtons(canUp, canDown) { moveSelected(it) }
-                    Spacer(Modifier.weight(1f))
-                    Text("${renameText.length}/$maxChars", style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(end = 8.dp))
                 }
             }
         } else if (editMode && selected.size > 1) Surface(tonalElevation = 3.dp) {
             Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                MoveButtons(canUp, canDown) { moveSelected(it) }
+                Text(L("${selected.size} seçili", "${selected.size} selected"), style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(start = 8.dp))
                 Spacer(Modifier.weight(1f))
-                Text(L("${selected.size} seçili", "${selected.size} selected"), style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(end = 8.dp))
+                MoveButtons(canUp, canDown) { moveSelected(it) }
             }
         } else Surface(tonalElevation = 3.dp) {
             Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 8.dp, vertical = 6.dp)) {
                 OutlinedTextField(
                     linkText, { linkText = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text(L("Link veya metin yapıştır (+ uzun bas: .txt)", "Paste a link or text (long-press +: .txt)")) },
+                    modifier = Modifier.fillMaxWidth().onPreviewKeyEvent { ev ->
+                        // Donanım klavyesi: Enter gönderir, Shift+Enter yeni satır
+                        if (ev.key == Key.Enter && !ev.isShiftPressed) { if (ev.type == KeyEventType.KeyDown) submit(); true } else false
+                    },
+                    placeholder = { Text(L("Link veya metin yapıştır (Enter: kaydet)", "Paste a link or text (Enter: save)")) },
                     singleLine = false, minLines = 2, maxLines = 8,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default))
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                    keyboardActions = KeyboardActions(onSend = { submit() }))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     val canAdd = linkText.isNotBlank()
+                    Text("${linkText.length}/$addMax", style = MaterialTheme.typography.labelSmall, color = if (linkText.length > addMax) MaterialTheme.colorScheme.error else Color.Unspecified, modifier = Modifier.padding(start = 8.dp))
+                    Spacer(Modifier.weight(1f))
                     Box(
                         Modifier.size(48.dp).clip(CircleShape)
-                            .combinedClickable(enabled = canAdd, onClick = { addFromText() }, onLongClick = { addTxt() }),
+                            .combinedClickable(enabled = canAdd, onClick = { submit() }, onLongClick = { addTxt() }),
                         contentAlignment = Alignment.Center
                     ) { Icon(Icons.Default.Add, L("Ekle (uzun bas: .txt)", "Add (long-press: .txt)"), tint = LocalContentColor.current.copy(alpha = if (canAdd) 1f else 0.38f)) }
                     IconButton({ startSearch() }, enabled = linkText.isNotBlank()) { Icon(Icons.Default.Search, L("Ara", "Search")) }
                     IconButton({ clipboard.getText()?.text?.let { linkText = it } }) { Icon(Icons.Default.ContentPaste, L("Yapıştır", "Paste")) }
-                    Spacer(Modifier.weight(1f))
-                    Text("${linkText.length}/$addMax", style = MaterialTheme.typography.labelSmall, color = if (linkText.length > addMax) MaterialTheme.colorScheme.error else Color.Unspecified, modifier = Modifier.padding(end = 8.dp))
                 }
             }
         }
@@ -384,13 +419,15 @@ fun App(resume: Int = 0) {
                 val sel = e.key in selected
                 Column(Modifier.animateItemPlacement()) {
                     ListItem(
-                        modifier = Modifier.clickable {
-                            when {
-                                editMode -> selected = if (sel) selected - e.key else selected + e.key
-                                e.isDir -> stack = stack + e
-                                else -> open(e)
-                            }
-                        },
+                        modifier = Modifier.combinedClickable(
+                            onClick = {
+                                when {
+                                    editMode -> selected = if (sel) selected - e.key else selected + e.key
+                                    e.isDir -> stack = stack + e
+                                    else -> open(e)
+                                }
+                            },
+                            onLongClick = { copyEntry(e) }),
                         colors = ListItemDefaults.colors(containerColor = when {
                             sel -> MaterialTheme.colorScheme.secondaryContainer
                             else -> MaterialTheme.colorScheme.surface
@@ -532,13 +569,19 @@ fun TxtScreen(
                     })
             }) { pad ->
                 if (editing) {
-                    TextField(
-                        value, { value = it },
-                        modifier = Modifier.padding(pad).fillMaxSize().imePadding().focusRequester(focus),
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,
-                            focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default))
+                    // Metin kaydırılabilir bir sütunda durur; altına boşluk eklenir, böylece imleç aşağı indikçe
+                    // metin yukarı çıkar ve klavyenin üstünde rahatça düzenlenir.
+                    val screenH = LocalConfiguration.current.screenHeightDp.dp
+                    Column(Modifier.padding(pad).fillMaxSize().imePadding().verticalScroll(rememberScrollState())) {
+                        TextField(
+                            value, { value = it },
+                            modifier = Modifier.fillMaxWidth().heightIn(min = screenH * 0.4f).focusRequester(focus),
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default))
+                        Spacer(Modifier.height(screenH * 0.5f))
+                    }
                 } else {
                     SelectionContainer {
                         Text(saved, Modifier.padding(pad).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp))

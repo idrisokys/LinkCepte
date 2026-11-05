@@ -53,6 +53,7 @@ final class Model: ObservableObject {
 
     let maxChars = 220   // ad değiştirme sınırı
     let addMax = 220     // alttaki ekleme alanı sınırı
+    var prevLinkCount = 0   // Enter ile gönderimi algılamak için önceki uzunluk
 
     /// Tüm dosya işlemleri sıralı yapılır.
     private let queue = DispatchQueue(label: "linkcepte.io")
@@ -280,16 +281,31 @@ final class Model: ObservableObject {
         }
     }
 
+    /// Enter / gönder: link ise link olarak, sınırı aşan metin .txt olarak, kısa metin not olarak kaydedilir.
     func addFromText() {
         let text = linkText.trimmed
         guard !text.isEmpty, let dir = current else { return }
-        if text.count > addMax {
-            toast(L("\(addMax) karakteri aşıyor. + simgesine uzun basarak (veya ⌥ ile tıklayarak) .txt olarak kaydedin",
-                  "Exceeds \(addMax) characters. Long-press + (or ⌥-click) to save it as a .txt file"))
-            return
-        }
+        let isUrl = Store.extractUrl(text) != nil
+        let singleUrl = isUrl && !text.contains(where: { $0.isWhitespace })   // boşluksuz uzun link yine link kalır
+        if text.count > addMax && !singleUrl { addTxt(); return }
         linkText = ""
         addExternal(text, into: dir, okMessage: L("Eklendi", "Added"))
+    }
+
+    /// Satıra uzun basınca metni doğrudan panoya kopyalar (.txt: içerik, link: adres, not: metin, klasör: ad).
+    func copyEntry(_ e: Entry) {
+        Task {
+            var t: String? = e.title
+            if !e.isDir {
+                if e.isTxt { t = await self.io { Store.readPlain(e.url) } }
+                else { let (u, n) = await self.io { Store.readLink(e.url) }; t = u ?? n ?? e.title }
+            }
+            if let t = t {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(t, forType: .string)
+                self.toast(L("Kopyalandı", "Copied"))
+            } else { self.toast(L("Kopyalanamadı", "Couldn't copy")) }
+        }
     }
 
     /// Sürükle-bırak ve Servisler menüsünden gelen metin/link.
