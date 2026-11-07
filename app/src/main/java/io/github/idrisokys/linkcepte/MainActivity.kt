@@ -361,6 +361,7 @@ fun App(resume: Int = 0) {
                         contentAlignment = Alignment.Center
                     ) { Icon(Icons.Default.Add, L("Ekle (uzun bas: .txt)", "Add (long-press: .txt)"), tint = LocalContentColor.current.copy(alpha = if (canAdd) 1f else 0.38f)) }
                     IconButton({ startSearch() }, enabled = linkText.isNotBlank()) { Icon(Icons.Default.Search, L("Ara", "Search")) }
+                    IconButton({ linkText = "" }, enabled = linkText.isNotEmpty()) { Icon(Icons.Default.Clear, L("Temizle", "Clear")) }
                     IconButton({ clipboard.getText()?.text?.let { linkText = it } }) { Icon(Icons.Default.ContentPaste, L("Yapıştır", "Paste")) }
                 }
             }
