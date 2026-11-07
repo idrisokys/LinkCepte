@@ -60,6 +60,12 @@ enum Store {
     private static let lock = NSRecursiveLock()
     private static let defaults = UserDefaults.standard
 
+    /// Yedekleme gibi çok adımlı işlemlerde diğer dosya işlemlerini beklet (kilit özyinelemelidir).
+    static func locked<T>(_ body: () throws -> T) rethrows -> T {
+        lock.lock(); defer { lock.unlock() }
+        return try body()
+    }
+
     // MARK: - Kök klasör
 
     /// Seçili kök klasör; yoksa veya yazılamıyorsa nil.
@@ -97,7 +103,7 @@ enum Store {
     }
 
     /// Dosya sistemi adı 255 bayt ile sınırlı; ".url" ve " (2)" payı bırakarak bayt cinsinden kısaltır.
-    private static func fitBytes(_ s: String, limit: Int = 240) -> String {
+    static func fitBytes(_ s: String, limit: Int = 240) -> String {
         var bytes = 0
         var out = String.UnicodeScalarView()
         for sc in s.unicodeScalars {
@@ -191,14 +197,10 @@ enum Store {
     static func addNote(_ dir: URL, text: String) -> Bool {
         var title = text.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression).trimmed
         if title.isEmpty { title = "not" }
-        return write(dir, title, noteData(text))
-    }
-
-    private static func noteData(_ text: String) -> Data {
         let enc = text.replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\r", with: "")
             .replacingOccurrences(of: "\n", with: "\\n")
-        return Data("[InternetShortcut]\r\nTEXT=\(enc)\r\n".utf8)
+        return write(dir, title, Data("[InternetShortcut]\r\nTEXT=\(enc)\r\n".utf8))
     }
 
     /// Metni, uzunluk sınırı olmadan düz .txt dosyası olarak kaydeder; ad metnin ilk 100 karakteridir.
@@ -290,9 +292,6 @@ enum Store {
         let order = ordered(all).map { $0.name }
         let dest = dir.appendingPathComponent(newName)
         let fm = FileManager.default
-        // Kısa metin kaydıysa (URL yok, TEXT var) içerik de yeni ada uymalı; yoksa kopyalama eski metni verir
-        var isNote = false
-        if !e.isDir && !e.isTxt { let ls = lines(e.url); isNote = urlOf(ls) == nil && textOf(ls) != nil }
         do {
             if norm(newName) == norm(e.name) {
                 // Yalnızca büyük/küçük harf değişiyor: büyük/küçük harfe duyarsız disklerde geçici ad gerekir.
@@ -303,7 +302,6 @@ enum Store {
                 try fm.moveItem(at: e.url, to: dest)
             }
         } catch { return false }
-        if isNote { try? noteData(title.trimmed).write(to: dest, options: .atomic) }
         saveOrderIn(dir, order.map { $0 == e.name ? newName : $0 })
         return true
     }

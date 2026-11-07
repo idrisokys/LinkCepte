@@ -368,17 +368,17 @@ object Store {
         try {
             val base = clean(title, 220)
             val newName = if (e.isDir) base else base + e.ext
-            if (newName == e.name) return true
             val all = children(ctx, dir)
+            // Kısa metin (not) ise: kopyalanan içerik de yeni ada uysun diye dosya içeriği güncellenir
+            val isNote = !e.isDir && !e.isTxt && textOf(lines(ctx, e.uri)) != null
+            if (newName == e.name) {
+                if (isNote) ctx.contentResolver.openOutputStream(e.uri, "wt")?.use { it.write(noteBytes(title.trim())) }
+                return true
+            }
             if (all.any { it.name.equals(newName, true) && it.uri != e.uri }) return false
             val order = ordered(ctx, all).map { it.name }
-            // Kısa metin kaydıysa (URL yok, TEXT var) içerik de yeni ada uymalı; yoksa kopyalama eski metni verir
-            val ls = if (e.isDir || e.isTxt) emptyList() else lines(ctx, e.uri)
-            val isNote = urlOf(ls) == null && textOf(ls) != null
             val renamed = DC.renameDocument(ctx.contentResolver, e.uri, newName) ?: return false
-            if (isNote) runCatching {
-                ctx.contentResolver.openOutputStream(renamed, "wt")?.use { it.write(noteBytes(title.trim())) }
-            }
+            if (isNote) ctx.contentResolver.openOutputStream(renamed, "wt")?.use { it.write(noteBytes(title.trim())) }
             saveOrderIn(ctx, dir, order.map { if (it == e.name) newName else it }, all)
             true
         } catch (ex: Exception) { false }

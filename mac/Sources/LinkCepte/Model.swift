@@ -2,11 +2,12 @@ import SwiftUI
 import AppKit
 
 enum Sheet: Identifiable {
-    case folder, move
+    case folder, move, note
     var id: Int {
         switch self {
         case .folder: return 0
         case .move: return 1
+        case .note: return 2
         }
     }
 }
@@ -24,9 +25,12 @@ final class Model: ObservableObject {
     @Published var searchQuery: String? = nil
     @Published var hits: [Hit]? = nil
     @Published var sheet: Sheet? = nil
+    @Published var noteText = ""
     @Published var moving: [Entry] = []
     @Published var renaming: Entry? = nil      // düzenleme modunda tek öğe seçiliyse o öğe (adı altta değiştirilir)
     @Published var renameText = ""
+    @Published var dbxBusy = false                       // Dropbox yedekleme/geri alma sürüyor
+    @Published var dbxConnected = Dropbox.connected      // Dropbox'a bağlı mı (menüdeki seçenekleri belirler)
     // Tam pencerede açık .txt dosyası
     @Published var txt: Entry? = nil
     @Published var txtSaved = ""               // dosyadaki son hâl
@@ -49,6 +53,7 @@ final class Model: ObservableObject {
 
     let maxChars = 220   // ad değiştirme sınırı
     let addMax = 220     // alttaki ekleme alanı sınırı
+    var prevLinkCount = 0   // Enter ile gönderimi algılamak için önceki uzunluk
 
     /// Tüm dosya işlemleri sıralı yapılır.
     private let queue = DispatchQueue(label: "linkcepte.io")
@@ -176,9 +181,9 @@ final class Model: ObservableObject {
                 .appendingPathComponent("chrome-extension", isDirectory: true)
             if Self.syncFolder(src, to: dst) { target = dst }
         }
-        NSWorkspace.shared.open(target)
-        toast(L("Chrome eklentisi klasörü açıldı — kurulum için README.md’ye bakın",
-                "Chrome extension folder opened — see README.md for setup"))
+        NSWorkspace.shared.activateFileViewerSelecting([target])   // klasörün içini değil, bulunduğu yeri açar ve klasörü seçili gösterir
+        toast(L("Chrome eklentisi klasörü Finder’da gösterildi — kurulum için README.md’ye bakın",
+                "Chrome extension folder shown in Finder — see README.md for setup"))
     }
 
     /// Klasörü dosya dosya kopyalar; aynı adlı dosyaların üzerine yazar. Hedef klasör silinmez,
@@ -255,24 +260,11 @@ final class Model: ObservableObject {
                 if let link = Store.makeURL(u), NSWorkspace.shared.open(link) { return }
                 self.toast(L("Link açılamadı", "Couldn't open the link"))
             } else if let t = t {
-                self.copyToPasteboard(t)
+                self.noteText = t
+                self.sheet = .note
             } else {
                 self.toast(L("Link okunamadı", "Couldn't read the link"))
             }
-        }
-    }
-
-    private func copyToPasteboard(_ s: String) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(s, forType: .string)
-        toast(L("Kopyalandı", "Copied"))
-    }
-
-    /// Sağ tık → Kopyala: dosya her seferinde yeniden okunur (ad değişince eski metin kopyalanmaz).
-    func copyEntry(_ e: Entry) {
-        Task {
-            let (u, t) = await self.io { Store.readLink(e.url) }
-            if let s = u ?? t { self.copyToPasteboard(s) } else { self.toast(L("Link okunamadı", "Couldn't read the link")) }
         }
     }
 
@@ -289,16 +281,31 @@ final class Model: ObservableObject {
         }
     }
 
+    /// Enter / gönder: link ise link olarak, sınırı aşan metin .txt olarak, kısa metin not olarak kaydedilir.
     func addFromText() {
         let text = linkText.trimmed
         guard !text.isEmpty, let dir = current else { return }
-        if text.count > addMax {
-            toast(L("\(addMax) karakteri aşıyor. + simgesine uzun basarak (veya ⌥ ile tıklayarak) .txt olarak kaydedin",
-                  "Exceeds \(addMax) characters. Long-press + (or ⌥-click) to save it as a .txt file"))
-            return
-        }
+        let isUrl = Store.extractUrl(text) != nil
+        let singleUrl = isUrl && !text.contains(where: { $0.isWhitespace })   // boşluksuz uzun link yine link kalır
+        if text.count > addMax && !singleUrl { addTxt(); return }
         linkText = ""
         addExternal(text, into: dir, okMessage: L("Eklendi", "Added"))
+    }
+
+    /// Satıra uzun basınca metni doğrudan panoya kopyalar (.txt: içerik, link: adres, not: metin, klasör: ad).
+    func copyEntry(_ e: Entry) {
+        Task {
+            var t: String? = e.title
+            if !e.isDir {
+                if e.isTxt { t = await self.io { Store.readPlain(e.url) } }
+                else { let (u, n) = await self.io { Store.readLink(e.url) }; t = u ?? n ?? e.title }
+            }
+            if let t = t {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(t, forType: .string)
+                self.toast(L("Kopyalandı", "Copied"))
+            } else { self.toast(L("Kopyalanamadı", "Couldn't copy")) }
+        }
     }
 
     /// Sürükle-bırak ve Servisler menüsünden gelen metin/link.
