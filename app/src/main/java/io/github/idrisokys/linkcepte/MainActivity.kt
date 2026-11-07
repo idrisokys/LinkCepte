@@ -222,8 +222,9 @@ fun App(resume: Int = 0) {
             }
             val (u, t) = withContext(Dispatchers.IO) { Store.readLink(ctx, e.uri) }
             if (u == null) {
-                // Kısa metin (not): önizleme açılmaz; yalnızca okunamayan dosya için uyarı verilir
-                if (t == null) toast(L("Link okunamadı", "Could not read link"))
+                // Kısa metin (not): önizleme açılmaz, tek tıklayınca metin doğrudan panoya kopyalanır
+                if (t != null) { clipboard.setText(AnnotatedString(t)); toast(L("Kopyalandı", "Copied")) }
+                else toast(L("Link okunamadı", "Could not read link"))
             }
             else try { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u))) } catch (ex: Exception) { toast(L("Link açılamadı", "Could not open link")) }
         }
