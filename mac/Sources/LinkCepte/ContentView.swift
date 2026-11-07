@@ -61,19 +61,23 @@ struct MainView: View {
                     }
                     Button { m.sheet = .folder } label: { Image(systemName: "folder.badge.plus") }
                         .help(L("Yeni klasör", "New folder"))
+                    Menu {
+                        Button(L("Klasörü değiştir…", "Change folder…")) { m.chooseFolder() }
+                    } label: { Image(systemName: "ellipsis.circle") }
+                        .menuIndicator(.hidden)
+                        .help(L("Menü", "Menu"))
                     Button { m.toggleEdit() } label: { Image(systemName: m.editMode ? "checkmark" : "pencil") }
                         .help(m.editMode ? L("Düzenlemeyi bitir", "Done editing") : L("Düzenle", "Edit"))
                 }
-                // En sağda: üç noktalı menü (Yenile, Klasör seç, Dropbox bağlantısı / yedekle / geri al)
-                MoreMenu(m: m)
+                // En sağda: kayıtlı klasörü yeniden tarar
+                Button { m.refresh() } label: { Image(systemName: "arrow.clockwise") }
+                    .help(L("Yenile (⌘R)", "Refresh (⌘R)"))
             }
         }
         .sheet(item: $m.sheet) { s in
             switch s {
             case .folder:
                 FolderSheet()
-            case .note:
-                NoteSheet()
             case .move:
                 if let r = m.root, let c = m.current {
                     MoveSheet(root: r, current: c, exclude: Set(m.moving.filter { $0.isDir }.map { $0.key }))
@@ -125,31 +129,11 @@ struct MainView: View {
         .contentShape(Rectangle())
         .background(sel ? Color.accentColor.opacity(0.22) : Color.clear)
         .onTapGesture { m.tap(e) }
-        .onLongPressGesture(minimumDuration: 0.5) { m.copyEntry(e) }
-    }
-}
-
-/// Araç çubuğunun en sağındaki ⋮ menüsü; Android'deki üç nokta menüsüyle aynı seçenekleri taşır.
-struct MoreMenu: View {
-    @ObservedObject var m: Model
-
-    var body: some View {
-        Menu {
-            Button { m.refresh() } label: { Label(L("Yenile", "Refresh"), systemImage: "arrow.clockwise") }
-            Button { m.chooseFolder() } label: { Label(L("Klasör seç…", "Choose folder…"), systemImage: "folder") }
-            Divider()
-            if !m.dbxConnected {
-                Button { m.dbxConnect() } label: { Label(L("Dropbox'a bağlan", "Connect to Dropbox"), systemImage: "icloud") }
-            } else {
-                Button { m.dbxBackup() } label: { Label(L("Dropbox'a yedekle", "Back up to Dropbox"), systemImage: "icloud.and.arrow.up") }
-                    .disabled(m.dbxBusy)
-                Button { m.dbxAskRestore() } label: { Label(L("Dropbox'tan geri al", "Restore from Dropbox"), systemImage: "icloud.and.arrow.down") }
-                    .disabled(m.dbxBusy)
-                Button { m.dbxDisconnect() } label: { Label(L("Dropbox bağlantısını kes", "Disconnect Dropbox"), systemImage: "icloud.slash") }
+        .contextMenu {
+            if !e.isDir && !e.isTxt && !m.editMode {
+                Button(L("Kopyala", "Copy")) { m.copyEntry(e) }
             }
-        } label: { Image(systemName: "ellipsis.circle") }
-            .menuIndicator(.hidden)
-            .help(L("Menü", "Menu"))
+        }
     }
 }
 
@@ -182,16 +166,8 @@ struct AddBar: View {
                     .font(.system(size: m.fontSize))
                     .scrollContentBackground(.hidden)
                     .padding(4)
-                    .onChange(of: m.linkText) { new in
-                        // Enter gönderir (Shift+Enter yeni satır). Yapıştırma birden fazla karakter ekler, etkilenmez.
-                        if new.hasSuffix("\n"), new.count == m.prevLinkCount + 1, !NSEvent.modifierFlags.contains(.shift) {
-                            m.linkText = String(new.dropLast())
-                            m.addFromText()
-                        }
-                        m.prevLinkCount = m.linkText.count
-                    }
                 if m.linkText.isEmpty {
-                    Text(L("Link veya metin yapıştır (Enter: kaydet)", "Paste a link or text (Enter: save)"))
+                    Text(L("Link veya metin yapıştır (+ uzun bas: .txt)", "Paste a link or text (long-press +: .txt)"))
                         .font(.system(size: m.fontSize))
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 9)
@@ -204,10 +180,6 @@ struct AddBar: View {
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.35)))
 
             HStack(spacing: 10) {
-                Text("\(m.linkText.count)/\(m.addMax)")
-                    .font(.caption)
-                    .foregroundStyle(m.linkText.count > m.addMax ? Color.red : Color.secondary)
-                Spacer()
                 Image(systemName: "plus")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.white)
@@ -228,6 +200,10 @@ struct AddBar: View {
                 Button { m.paste() } label: { Image(systemName: "doc.on.clipboard") }
                     .help(L("Yapıştır", "Paste"))
                 FontSizeButtons()
+                Spacer()
+                Text("\(m.linkText.count)/\(m.addMax)")
+                    .font(.caption)
+                    .foregroundStyle(m.linkText.count > m.addMax ? Color.red : Color.secondary)
             }
         }
         .padding(8)
@@ -237,6 +213,7 @@ struct AddBar: View {
 
 struct RenameBar: View {
     @EnvironmentObject var m: Model
+    @State private var prevCount = 0
 
     var body: some View {
         VStack(spacing: 6) {
@@ -259,23 +236,22 @@ struct RenameBar: View {
             .background(RoundedRectangle(cornerRadius: 8).fill(Color(nsColor: .textBackgroundColor)))
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.35)))
             .onChange(of: m.renameText) { v in
-                // Ad tek satırdır: satır sonları boşluğa çevrilir, uzunluk sınırlanır
-                var t = v.replacingOccurrences(of: "\n", with: " ")
+                // Enter tuşu kaydeder (tek karakter olarak sona eklenen satır sonu); yapıştırılan satır sonları boşluğa çevrilir.
+                let typedEnter = v.hasSuffix("\n") && v.count == prevCount + 1 && !v.dropLast().contains("\n")
+                var t = typedEnter ? String(v.dropLast()) : v.replacingOccurrences(of: "\n", with: " ")
                 if t.count > m.maxChars { t = String(t.prefix(m.maxChars)) }
+                prevCount = t.count
                 if t != v { m.renameText = t }
+                if typedEnter { m.saveRename() }
             }
             HStack(spacing: 10) {
+                Button { m.pasteIntoRename() } label: { Image(systemName: "doc.on.clipboard") }
+                    .help(L("Yapıştır", "Paste"))
+                FontSizeButtons()
+                Spacer()
                 Text("\(m.renameText.count)/\(m.maxChars)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Spacer()
-                Button { m.pasteIntoRename() } label: { Image(systemName: "doc.on.clipboard") }
-                    .help(L("Yapıştır", "Paste"))
-                Button { m.saveRename() } label: { Image(systemName: "square.and.arrow.down") }
-                    .keyboardShortcut("s", modifiers: .command)
-                    .disabled(m.renameText.trimmed.isEmpty)
-                    .help(L("Kaydet (⌘S)", "Save (⌘S)"))
-                FontSizeButtons()
             }
             .frame(height: 30)   // ekleme çubuğundaki düğme satırıyla aynı yükseklik
         }

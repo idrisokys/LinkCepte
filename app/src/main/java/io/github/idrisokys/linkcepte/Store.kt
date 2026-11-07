@@ -150,8 +150,12 @@ object Store {
     /** Düz metni de kaydeder (URL olmayan kayıt). */
     fun addNote(ctx: Context, dir: Uri, text: String): Boolean {
         val title = text.replace(WS, " ").trim().ifBlank { "not" }
+        return write(ctx, dir, title, noteBytes(text))
+    }
+
+    private fun noteBytes(text: String): ByteArray {
         val enc = text.replace("\\", "\\\\").replace("\r", "").replace("\n", "\\n")
-        return write(ctx, dir, title, "[InternetShortcut]\r\nTEXT=$enc\r\n".toByteArray())
+        return "[InternetShortcut]\r\nTEXT=$enc\r\n".toByteArray()
     }
 
     /** Metni, uzunluk sınırı olmadan düz .txt dosyası olarak kaydeder; ad metnin ilk 100 karakteridir. */
@@ -368,7 +372,13 @@ object Store {
             val all = children(ctx, dir)
             if (all.any { it.name.equals(newName, true) && it.uri != e.uri }) return false
             val order = ordered(ctx, all).map { it.name }
-            DC.renameDocument(ctx.contentResolver, e.uri, newName) ?: return false
+            // Kısa metin kaydıysa (URL yok, TEXT var) içerik de yeni ada uymalı; yoksa kopyalama eski metni verir
+            val ls = if (e.isDir || e.isTxt) emptyList() else lines(ctx, e.uri)
+            val isNote = urlOf(ls) == null && textOf(ls) != null
+            val renamed = DC.renameDocument(ctx.contentResolver, e.uri, newName) ?: return false
+            if (isNote) runCatching {
+                ctx.contentResolver.openOutputStream(renamed, "wt")?.use { it.write(noteBytes(title.trim())) }
+            }
             saveOrderIn(ctx, dir, order.map { if (it == e.name) newName else it }, all)
             true
         } catch (ex: Exception) { false }
