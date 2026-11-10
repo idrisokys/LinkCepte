@@ -651,12 +651,13 @@ fun SearchResults(pad: PaddingValues, hits: List<Hit>?, onOpen: (Entry) -> Unit,
     }
 }
 
-/** Klasör seçimini ACTION_OPEN_DOCUMENT_TREE ile sistemin uygun sağlayıcısına bırakır. */
+/** Klasör seçimini Android'in sistem klasör seçicisi üzerinden başlatır. */
 class PickFolderContract : androidx.activity.result.contract.ActivityResultContract<Void?, Uri?>() {
     override fun createIntent(context: android.content.Context, input: Void?): Intent {
-        return Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(
             Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
                 Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or Intent.FLAG_GRANT_PREFIX_URI_PERMISSION)
+        return Intent.createChooser(intent, L("Klasör seç", "Choose folder"))
     }
     override fun parseResult(resultCode: Int, intent: Intent?): Uri? =
         if (resultCode == android.app.Activity.RESULT_OK) intent?.data else null
