@@ -128,31 +128,18 @@ fun App(resume: Int = 0) {
     var asked by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(root) { if (root == null && !asked) { asked = true; requestAccess() } }
 
-    // İçerik klasörünü dosya yöneticisinde açar. DocumentsUI şart değildir: sırayla birkaç yöntem denenir.
-    fun openContentFolder(dir: Uri) {
-        val grant = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK
-        val tries = ArrayList<Intent>()
-        // 1) FileProvider + "resource/folder": Solid Explorer, MiXplorer, Material Files, FX vb. çoğu yönetici
-        try {
-            val cu = androidx.core.content.FileProvider.getUriForFile(ctx, ctx.packageName + ".files", java.io.File(dir.path ?: ""))
-            tries.add(Intent(Intent.ACTION_VIEW).setDataAndType(cu, "resource/folder"))
-            tries.add(Intent(Intent.ACTION_VIEW).setDataAndType(cu, "vnd.android.document/directory"))
-        } catch (e: Exception) { }
-        // 2) Harici depolama belge Uri'si (DocumentsUI ve uyumlu yöneticiler)
-        Store.documentUri(dir)?.let { doc ->
-            tries.add(Intent(Intent.ACTION_VIEW).setDataAndType(doc, android.provider.DocumentsContract.Document.MIME_TYPE_DIR))
-            // 3) Dosya seçici (ACTION_GET_CONTENT), başlangıç konumu bu klasör
-            tries.add(Intent(Intent.ACTION_GET_CONTENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE)
-                .putExtra(android.provider.DocumentsContract.EXTRA_INITIAL_URI, doc))
+    // Klasör simgesi her zaman QuickShare/Link klasörünü ACTION_GET_CONTENT ile açar.
+    fun openContentFolder() {
+        val dir = Store.root(ctx) ?: return
+        val doc = Store.documentUri(dir)
+        val i = Intent(Intent.ACTION_GET_CONTENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (doc != null) i.putExtra(android.provider.DocumentsContract.EXTRA_INITIAL_URI, doc)
+        try { ctx.startActivity(i) } catch (e: Exception) {
+            val path = dir.path ?: ""
+            clipboard.setText(AnnotatedString(path))
+            toast(L("Klasör açılamadı; yol kopyalandı: $path", "Could not open folder; path copied: $path"))
         }
-        for (i in tries) {
-            i.addFlags(grant)
-            try { ctx.startActivity(i); return } catch (e: Exception) { }
-        }
-        // Hiçbiri olmadıysa yolu panoya kopyala
-        val path = dir.path ?: ""
-        clipboard.setText(AnnotatedString(path))
-        toast(L("Klasör açılamadı; yol kopyalandı: $path", "Could not open folder; path copied: $path"))
     }
 
     val rootUri = root
@@ -366,7 +353,7 @@ fun App(resume: Int = 0) {
                     keyboardActions = KeyboardActions(onSend = { submit() }))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     val canAdd = linkText.isNotBlank()
-                    IconButton({ openContentFolder(current) }) { Icon(Icons.Default.FolderOpen, L("İçerik klasörünü aç", "Open content folder")) }
+                    IconButton({ openContentFolder() }) { Icon(Icons.Default.FolderOpen, L("İçerik klasörünü aç", "Open content folder")) }
                     Text("${linkText.length}/$addMax", style = MaterialTheme.typography.labelSmall, color = if (linkText.length > addMax) MaterialTheme.colorScheme.error else Color.Unspecified, modifier = Modifier.padding(start = 8.dp))
                     Spacer(Modifier.weight(1f))
                     Box(
