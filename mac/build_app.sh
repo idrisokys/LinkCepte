@@ -18,6 +18,9 @@ mkdir -p "$APP/Contents/Resources/tr.lproj" "$APP/Contents/Resources/en.lproj"
 cp Resources/tr.lproj/ServicesMenu.strings "$APP/Contents/Resources/tr.lproj/"
 cp Resources/en.lproj/ServicesMenu.strings "$APP/Contents/Resources/en.lproj/"
 
+# Araç çubuğundaki sürümler ikonu
+cp Resources/releases_icon.png "$APP/Contents/Resources/releases_icon.png"
+
 # İkon
 ICONSET="build/AppIcon.iconset"
 mkdir -p "$ICONSET"

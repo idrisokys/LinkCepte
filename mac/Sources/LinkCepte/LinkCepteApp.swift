@@ -29,21 +29,6 @@ struct LinkCepteApp: App {
                     .keyboardShortcut("e", modifiers: .command)
                 Button(L("Geri", "Back")) { model.goBack() }
                     .keyboardShortcut("[", modifiers: .command)
-                Button(L("Yenile", "Refresh")) { model.refresh() }
-                    .keyboardShortcut("r", modifiers: .command)
-                Divider()
-                Button(L("Klasörü Değiştir…", "Change Folder…")) { model.chooseFolder() }
-                    .keyboardShortcut("o", modifiers: .command)
-                Divider()
-                if model.dbxConnected {
-                    Button(L("Dropbox'a Yedekle", "Back Up to Dropbox")) { model.dbxBackup() }
-                        .disabled(model.dbxBusy)
-                    Button(L("Dropbox'tan Geri Al…", "Restore from Dropbox…")) { model.dbxAskRestore() }
-                        .disabled(model.dbxBusy)
-                    Button(L("Dropbox Bağlantısını Kes", "Disconnect Dropbox")) { model.dbxDisconnect() }
-                } else {
-                    Button(L("Dropbox'a Bağlan", "Connect to Dropbox")) { model.dbxConnect() }
-                }
                 Divider()
                 Button(L("Yazıyı Büyüt", "Larger Text")) { model.bumpFont(1) }
                     .keyboardShortcut("+", modifiers: .command)
@@ -78,11 +63,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Paylaş eklentisinden gelen linkcepte://add?t=... adresi ve Dropbox girişinden dönüş adresi.
+    /// Paylaş eklentisinden gelen linkcepte://add?t=... adresi.
     func application(_ application: NSApplication, open urls: [URL]) {
-        for u in urls where u.scheme == Dropbox.scheme {   // Dropbox girişinden dönüş
-            Task { @MainActor in Model.shared.dropboxCallback(u) }
-        }
         for u in urls where u.scheme == "linkcepte" {
             guard let c = URLComponents(url: u, resolvingAgainstBaseURL: false),
                   let t = c.queryItems?.first(where: { $0.name == "t" })?.value else { continue }

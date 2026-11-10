@@ -1,7 +1,4 @@
 plugins { id("com.android.application"); id("org.jetbrains.kotlin.android") }
-// gradle.properties boş ya da örnek değerde kalsa bile uygulamanın kendi anahtarı kullanılır (App key gizli bilgi değildir)
-val dropboxKey: String = (project.findProperty("DROPBOX_APP_KEY") as String?)?.trim().orEmpty()
-    .let { if (it.isEmpty() || it == "YOUR_DROPBOX_APP_KEY") "01a5zg8oc8aas3c" else it }
 android {
     namespace = "io.github.idrisokys.linkcepte"
     compileSdk = 34
@@ -9,8 +6,6 @@ android {
         applicationId = "io.github.idrisokys.linkcepte"
         minSdk = 24; targetSdk = 34; versionCode = 2; versionName = "1.1"
         resourceConfigurations += listOf("tr", "en")
-        buildConfigField("String", "DROPBOX_APP_KEY", "\"$dropboxKey\"")
-        manifestPlaceholders["dropboxScheme"] = "db-$dropboxKey"
     }
     buildTypes {
         release {

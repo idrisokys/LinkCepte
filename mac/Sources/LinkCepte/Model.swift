@@ -29,8 +29,6 @@ final class Model: ObservableObject {
     @Published var moving: [Entry] = []
     @Published var renaming: Entry? = nil      // düzenleme modunda tek öğe seçiliyse o öğe (adı altta değiştirilir)
     @Published var renameText = ""
-    @Published var dbxBusy = false                       // Dropbox yedekleme/geri alma sürüyor
-    @Published var dbxConnected = Dropbox.connected      // Dropbox'a bağlı mı (menüdeki seçenekleri belirler)
     // Tam pencerede açık .txt dosyası
     @Published var txt: Entry? = nil
     @Published var txtSaved = ""               // dosyadaki son hâl

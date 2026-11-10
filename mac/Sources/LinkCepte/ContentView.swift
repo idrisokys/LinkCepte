@@ -64,8 +64,8 @@ struct MainView: View {
                     Button { m.toggleEdit() } label: { Image(systemName: m.editMode ? "checkmark" : "pencil") }
                         .help(m.editMode ? L("Düzenlemeyi bitir", "Done editing") : L("Düzenle", "Edit"))
                 }
-                // En sağda: üç noktalı menü (Yenile, Klasör seç, Dropbox bağlantısı / yedekle / geri al)
-                MoreMenu(m: m)
+                // En sağda: bilgi (i) ikonu; küçük menü açar
+                InfoButton()
             }
         }
         .sheet(item: $m.sheet) { s in
@@ -129,27 +129,28 @@ struct MainView: View {
     }
 }
 
-/// Araç çubuğunun en sağındaki ⋮ menüsü; Android'deki üç nokta menüsüyle aynı seçenekleri taşır.
-struct MoreMenu: View {
-    @ObservedObject var m: Model
+/// Araç çubuğunun en sağındaki bilgi (i) ikonu: gemi resmi, e-posta ve GitHub adresini gösteren küçük menü açar.
+struct InfoButton: View {
+    @State private var shown = false
 
     var body: some View {
-        Menu {
-            Button { m.refresh() } label: { Label(L("Yenile", "Refresh"), systemImage: "arrow.clockwise") }
-            Button { m.chooseFolder() } label: { Label(L("Klasör seç…", "Choose folder…"), systemImage: "folder") }
-            Divider()
-            if !m.dbxConnected {
-                Button { m.dbxConnect() } label: { Label(L("Dropbox'a bağlan", "Connect to Dropbox"), systemImage: "icloud") }
-            } else {
-                Button { m.dbxBackup() } label: { Label(L("Dropbox'a yedekle", "Back up to Dropbox"), systemImage: "icloud.and.arrow.up") }
-                    .disabled(m.dbxBusy)
-                Button { m.dbxAskRestore() } label: { Label(L("Dropbox'tan geri al", "Restore from Dropbox"), systemImage: "icloud.and.arrow.down") }
-                    .disabled(m.dbxBusy)
-                Button { m.dbxDisconnect() } label: { Label(L("Dropbox bağlantısını kes", "Disconnect Dropbox"), systemImage: "icloud.slash") }
+        Button { shown.toggle() } label: { Image(systemName: "info.circle") }
+            .help(L("Bilgi", "Info"))
+            .popover(isPresented: $shown, arrowEdge: .bottom) {
+                VStack(spacing: 10) {
+                    if let img = NSImage(named: "releases_icon") {
+                        Image(nsImage: img).resizable().scaledToFill()
+                            .frame(width: 72, height: 72).clipShape(Circle())
+                    }
+                    Text("mail: sislivadi@gmail.com").textSelection(.enabled)
+                    HStack(spacing: 0) {
+                        Text("github: ")
+                        Link("https://github.com/idrisokys/", destination: URL(string: "https://github.com/idrisokys/")!)
+                    }
+                }
+                .font(.system(size: 13))
+                .padding(16)
             }
-        } label: { Image(systemName: "ellipsis.circle") }
-            .menuIndicator(.hidden)
-            .help(L("Menü", "Menu"))
     }
 }
 

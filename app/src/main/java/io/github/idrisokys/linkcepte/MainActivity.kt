@@ -10,6 +10,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
@@ -88,8 +91,8 @@ fun App(resume: Int = 0) {
     var selected by remember { mutableStateOf(setOf<String>()) } // düzenleme modunda işaretlenen öğeler
     var moving by remember { mutableStateOf<List<Entry>>(emptyList()) }   // taşınacak öğeler
     var dialog by remember { mutableStateOf<String?>(null) }
+    var infoMenu by remember { mutableStateOf(false) }          // sağ üstteki bilgi (i) menüsü
     var renameText by remember { mutableStateOf("") }
-    var menu by remember { mutableStateOf(false) }
     var txtDoc by remember { mutableStateOf<Pair<Entry, String>?>(null) }   // tam ekranda açık .txt (öğe, içerik)
     var linkText by remember { mutableStateOf("") }
     var searchQuery by remember { mutableStateOf<String?>(null) }   // null = normal liste
@@ -98,49 +101,11 @@ fun App(resume: Int = 0) {
     val clipboard = LocalClipboardManager.current
     val focus = LocalFocusManager.current
 
-    var dbxBusy by remember { mutableStateOf(false) }
-    var dbxInfo by remember { mutableStateOf<String?>(null) }   // Dropbox sonuç/hata mesajı (tam metin)
     val maxChars = 220      // ad değiştirme sınırı
     val addMax = 220        // alttaki ekleme alanı sınırı
     fun toast(s: String) = Toast.makeText(ctx, s, Toast.LENGTH_SHORT).show()
     fun run(reload: Boolean = true, block: () -> Unit) {
         scope.launch { lock.withLock { withContext(Dispatchers.IO) { block() } }; if (reload) tick++ }
-    }
-
-    fun longToast(s: String) = Toast.makeText(ctx, s, Toast.LENGTH_LONG).show()
-    // Dropbox: yedekle (tüm klasör tek zip) / geri yükle (zip kök klasöre birleştirilir)
-    fun dbxStart() {
-        if (!Dropbox.configured()) longToast(L("Dropbox uygulama anahtarı ayarlanmamış (gradle.properties → DROPBOX_APP_KEY)", "Dropbox app key not set (gradle.properties → DROPBOX_APP_KEY)"))
-        else try { Dropbox.startAuth(ctx) } catch (e: Exception) { longToast(L("Tarayıcı açılamadı", "Could not open browser")) }
-    }
-    fun dbxBackup() {
-        if (dbxBusy) return
-        dbxBusy = true; toast(L("Yedekleniyor…", "Backing up…"))
-        scope.launch {
-            val msg = withContext(Dispatchers.IO) {
-                try {
-                    val bos = java.io.ByteArrayOutputStream()
-                    val n = lock.withLock { Store.exportZip(ctx, bos) }   // kilit yalnızca yerel okuma sırasında tutulur
-                    Dropbox.upload(ctx, bos.toByteArray())
-                    L("Dropbox'a yedeklendi ($n dosya)", "Backed up to Dropbox ($n files)")
-                } catch (e: Exception) { L("Yedekleme hatası: ", "Backup error: ") + (e.message ?: e.javaClass.simpleName) }
-            }
-            dbxBusy = false; dbxInfo = msg
-        }
-    }
-    fun dbxRestore() {
-        if (dbxBusy) return
-        dbxBusy = true; toast(L("Geri yükleniyor…", "Restoring…"))
-        scope.launch {
-            val msg = withContext(Dispatchers.IO) {
-                try {
-                    val data = Dropbox.download(ctx)                       // indirme kilitsiz
-                    val n = lock.withLock { Store.importZip(ctx, java.io.ByteArrayInputStream(data)) }
-                    L("Geri yüklendi ($n dosya)", "Restored ($n files)")
-                } catch (e: Exception) { L("Geri yükleme hatası: ", "Restore error: ") + (e.message ?: e.javaClass.simpleName) }
-            }
-            dbxBusy = false; tick++; dbxInfo = msg
-        }
     }
 
     // Klasör seçimi: belirli bir uygulamaya (DocumentsUI) bağlı değil; ACTION_OPEN_DOCUMENT_TREE'yi
@@ -421,26 +386,29 @@ fun App(resume: Int = 0) {
                 IconButton({ editMode = !editMode; selected = emptySet() }) {
                     Icon(if (editMode) Icons.Default.Done else Icons.Default.Edit, if (editMode) L("Düzenlemeyi bitir", "Done editing") else L("Düzenle", "Edit"))
                 }
-                // En sağdaki üç nokta menüsü: yenile, klasör seç, Dropbox bağlan / yedekle / geri al
+                // En sağdaki bilgi (i) ikonu: küçük menü açar (gemi resmi, e-posta, GitHub adresi)
                 Box {
-                    IconButton({ menu = true }) { Icon(Icons.Default.MoreVert, L("Menü", "Menu")) }
-                    DropdownMenu(menu, { menu = false }) {
-                        DropdownMenuItem({ Text(L("Yenile", "Refresh")) }, { menu = false; tick++; toast(L("Yenilendi", "Refreshed")) },
-                            leadingIcon = { Icon(Icons.Default.Refresh, null) })
-                        DropdownMenuItem({ Text(L("Klasör seç", "Choose folder")) }, { menu = false; pickFolder.launch(null) },
-                            leadingIcon = { Icon(Icons.Default.FolderOpen, null) })
-                        HorizontalDivider()
-                        if (!Dropbox.connected(ctx)) {
-                            DropdownMenuItem({ Text(L("Dropbox'a bağlan", "Connect to Dropbox")) }, { menu = false; dbxStart() },
-                                leadingIcon = { Icon(Icons.Default.Cloud, null) })
-                        } else {
-                            DropdownMenuItem({ Text(L("Dropbox'a yedekle", "Back up to Dropbox")) }, { menu = false; dbxBackup() },
-                                enabled = !dbxBusy, leadingIcon = { Icon(Icons.Default.CloudUpload, null) })
-                            DropdownMenuItem({ Text(L("Dropbox'tan geri al", "Restore from Dropbox")) }, { menu = false; dialog = "restore" },
-                                enabled = !dbxBusy, leadingIcon = { Icon(Icons.Default.CloudDownload, null) })
-                            DropdownMenuItem({ Text(L("Dropbox bağlantısını kes", "Disconnect Dropbox")) },
-                                { menu = false; scope.launch { withContext(Dispatchers.IO) { Dropbox.disconnect(ctx) }; tick++; toast(L("Bağlantı kesildi", "Disconnected")) } },
-                                leadingIcon = { Icon(Icons.Default.CloudOff, null) })
+                    IconButton({ infoMenu = true }) { Icon(Icons.Default.Info, L("Bilgi", "Info")) }
+                    DropdownMenu(infoMenu, { infoMenu = false }) {
+                        Column(Modifier.padding(horizontal = 20.dp, vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Image(
+                                painterResource(R.drawable.releases_icon), null,
+                                Modifier.size(72.dp).clip(CircleShape), contentScale = ContentScale.Crop)
+                            Spacer(Modifier.height(12.dp))
+                            SelectionContainer { Text("mail: sislivadi@gmail.com", style = MaterialTheme.typography.bodyMedium) }
+                            Spacer(Modifier.height(8.dp))
+                            Row {
+                                Text("github: ", style = MaterialTheme.typography.bodyMedium)
+                                Text(
+                                    "https://github.com/idrisokys/", style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
+                                    modifier = Modifier.clickable {
+                                        infoMenu = false
+                                        try { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/idrisokys/"))) }
+                                        catch (e: Exception) { toast(L("Link açılamadı", "Could not open link")) }
+                                    })
+                            }
                         }
                     }
                 }
@@ -501,21 +469,6 @@ fun App(resume: Int = 0) {
             confirmButton = { TextButton({ val n = title; dialog = null; run { Store.addFolder(ctx, current, n) } }, enabled = title.isNotBlank()) { Text(L("Oluştur", "Create")) } },
             dismissButton = { TextButton({ dialog = null }) { Text(L("İptal", "Cancel")) } })
     }
-
-    dbxInfo?.let { m ->
-        AlertDialog(
-            onDismissRequest = { dbxInfo = null },
-            title = { Text("Dropbox") },
-            text = { androidx.compose.foundation.text.selection.SelectionContainer { Text(m, modifier = Modifier.verticalScroll(rememberScrollState())) } },
-            confirmButton = { TextButton({ dbxInfo = null }) { Text(L("Tamam", "OK")) } })
-    }
-
-    if (dialog == "restore") AlertDialog(
-        onDismissRequest = { dialog = null },
-        title = { Text(L("Dropbox'tan geri yükle", "Restore from Dropbox")) },
-        text = { Text(L("Dropbox'taki yedek mevcut klasöre eklenir. Var olan hiçbir dosya silinmez veya değiştirilmez; yalnızca eksik olanlar getirilir. Aynı adlı ama farklı içerikli dosyalar \"(Dropbox)\" ekiyle ayrı kaydedilir.", "The Dropbox backup is merged into your current folder. No existing file is deleted or changed; only missing items are added. Files with the same name but different content are saved separately with a \"(Dropbox)\" suffix.")) },
-        confirmButton = { TextButton({ dialog = null; dbxRestore() }) { Text(L("Geri yükle", "Restore")) } },
-        dismissButton = { TextButton({ dialog = null }) { Text(L("İptal", "Cancel")) } })
 
     if (dialog == "move") {
         val files = moving

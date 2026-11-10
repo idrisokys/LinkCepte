@@ -28,8 +28,6 @@
             <key>CFBundleURLSchemes</key>
             <array>
                 <string>linkcepte</string>
-                <!-- Dropbox girişinden dönüş: db-<APP_KEY>://1/connect (Dropbox.swift içindeki appKey ile aynı olmalı) -->
-                <string>db-01a5zg8oc8aas3c</string>
             </array>
         </dict>
     </array>
