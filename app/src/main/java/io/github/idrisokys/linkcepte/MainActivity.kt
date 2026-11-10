@@ -128,18 +128,31 @@ fun App(resume: Int = 0) {
     var asked by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(root) { if (root == null && !asked) { asked = true; requestAccess() } }
 
-    // Klasör simgesi her zaman QuickShare/Link klasörünü ACTION_GET_CONTENT ile açar.
+    // Klasör simgesi her zaman QuickShare/Link klasörünü dosya yöneticisinde açar.
+    // DocumentsUI şart değildir: sırayla ACTION_VIEW yöntemleri, olmazsa ACTION_GET_CONTENT denenir.
     fun openContentFolder() {
         val dir = Store.root(ctx) ?: return
-        val doc = Store.documentUri(dir)
-        val i = Intent(Intent.ACTION_GET_CONTENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE)
-            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-        if (doc != null) i.putExtra(android.provider.DocumentsContract.EXTRA_INITIAL_URI, doc)
-        try { ctx.startActivity(i) } catch (e: Exception) {
-            val path = dir.path ?: ""
-            clipboard.setText(AnnotatedString(path))
-            toast(L("Klasör açılamadı; yol kopyalandı: $path", "Could not open folder; path copied: $path"))
+        val grant = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK
+        val tries = ArrayList<Intent>()
+        // 1) FileProvider + "resource/folder": Solid Explorer, MiXplorer, Material Files, FX vb.
+        try {
+            val cu = androidx.core.content.FileProvider.getUriForFile(ctx, ctx.packageName + ".files", java.io.File(dir.path ?: ""))
+            tries.add(Intent(Intent.ACTION_VIEW).setDataAndType(cu, "resource/folder"))
+            tries.add(Intent(Intent.ACTION_VIEW).setDataAndType(cu, "vnd.android.document/directory"))
+        } catch (e: Exception) { }
+        // 2) Harici depolama belge Uri'si (DocumentsUI ve uyumlu yöneticiler) + 3) ACTION_GET_CONTENT
+        Store.documentUri(dir)?.let { doc ->
+            tries.add(Intent(Intent.ACTION_VIEW).setDataAndType(doc, android.provider.DocumentsContract.Document.MIME_TYPE_DIR))
+            tries.add(Intent(Intent.ACTION_GET_CONTENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE)
+                .putExtra(android.provider.DocumentsContract.EXTRA_INITIAL_URI, doc))
         }
+        for (i in tries) {
+            i.addFlags(grant)
+            try { ctx.startActivity(i); return } catch (e: Exception) { }
+        }
+        val path = dir.path ?: ""
+        clipboard.setText(AnnotatedString(path))
+        toast(L("Klasör açılamadı; yol kopyalandı: $path", "Could not open folder; path copied: $path"))
     }
 
     val rootUri = root
