@@ -137,19 +137,16 @@ struct InfoButton: View {
         Button { shown.toggle() } label: { Image(systemName: "info.circle") }
             .help(L("Bilgi", "Info"))
             .popover(isPresented: $shown, arrowEdge: .bottom) {
-                VStack(spacing: 10) {
+                VStack(spacing: 4) {
                     if let img = NSImage(named: "releases_icon") {
                         Image(nsImage: img).resizable().scaledToFill()
-                            .frame(width: 72, height: 72).clipShape(Circle())
+                            .frame(width: 36, height: 36).clipShape(Circle())
                     }
-                    Text("mail: sislivadi@gmail.com").textSelection(.enabled)
-                    HStack(spacing: 0) {
-                        Text("github: ")
-                        Link("https://github.com/idrisokys/", destination: URL(string: "https://github.com/idrisokys/")!)
-                    }
+                    Text("sislivadi@gmail.com").textSelection(.enabled)
+                    Link("https://github.com/idrisokys/", destination: URL(string: "https://github.com/idrisokys/")!)
                 }
-                .font(.system(size: 13))
-                .padding(16)
+                .font(.system(size: 11))
+                .padding(8)
             }
     }
 }

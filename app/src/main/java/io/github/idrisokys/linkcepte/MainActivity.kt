@@ -390,25 +390,22 @@ fun App(resume: Int = 0) {
                 Box {
                     IconButton({ infoMenu = true }) { Icon(Icons.Default.Info, L("Bilgi", "Info")) }
                     DropdownMenu(infoMenu, { infoMenu = false }) {
-                        Column(Modifier.padding(horizontal = 20.dp, vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Column(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             Image(
                                 painterResource(R.drawable.releases_icon), null,
-                                Modifier.size(72.dp).clip(CircleShape), contentScale = ContentScale.Crop)
-                            Spacer(Modifier.height(12.dp))
-                            SelectionContainer { Text("mail: sislivadi@gmail.com", style = MaterialTheme.typography.bodyMedium) }
-                            Spacer(Modifier.height(8.dp))
-                            Row {
-                                Text("github: ", style = MaterialTheme.typography.bodyMedium)
-                                Text(
-                                    "https://github.com/idrisokys/", style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
-                                    modifier = Modifier.clickable {
-                                        infoMenu = false
-                                        try { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/idrisokys/"))) }
-                                        catch (e: Exception) { toast(L("Link açılamadı", "Could not open link")) }
-                                    })
-                            }
+                                Modifier.size(36.dp).clip(CircleShape), contentScale = ContentScale.Crop)
+                            Spacer(Modifier.height(4.dp))
+                            SelectionContainer { Text("sislivadi@gmail.com", style = MaterialTheme.typography.bodySmall) }
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                "https://github.com/idrisokys/", style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
+                                modifier = Modifier.clickable {
+                                    infoMenu = false
+                                    try { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/idrisokys/"))) }
+                                    catch (e: Exception) { toast(L("Link açılamadı", "Could not open link")) }
+                                })
                         }
                     }
                 }
