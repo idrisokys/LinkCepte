@@ -141,8 +141,9 @@ fun App(resume: Int = 0) {
         // 2) Harici depolama belge Uri'si (DocumentsUI ve uyumlu yöneticiler)
         Store.documentUri(dir)?.let { doc ->
             tries.add(Intent(Intent.ACTION_VIEW).setDataAndType(doc, android.provider.DocumentsContract.Document.MIME_TYPE_DIR))
-            // 3) Klasör seçici, başlangıç konumu bu klasör (ACTION_OPEN_DOCUMENT_TREE'yi destekleyen herhangi bir yönetici)
-            tries.add(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).putExtra(android.provider.DocumentsContract.EXTRA_INITIAL_URI, doc))
+            // 3) Dosya seçici (ACTION_GET_CONTENT), başlangıç konumu bu klasör
+            tries.add(Intent(Intent.ACTION_GET_CONTENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE)
+                .putExtra(android.provider.DocumentsContract.EXTRA_INITIAL_URI, doc))
         }
         for (i in tries) {
             i.addFlags(grant)
