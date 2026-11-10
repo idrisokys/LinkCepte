@@ -15,7 +15,7 @@ class ShareActivity : Activity() {
             val root = Store.root(app)
             val msg = when {
                 text.isBlank() -> L("Paylaşılacak bir şey bulunamadı", "Nothing to share")
-                root == null -> L("Önce Link Cepte’yi açıp klasör seçin", "Open Link Cepte and choose a folder first")
+                root == null -> L("Önce Link Cepte’yi açıp depolama izni verin", "Open Link Cepte and grant storage permission first")
                 Store.addFromText(app, root, text, subject) -> L("Kaydedildi", "Saved")
                 else -> L("Kaydedilemedi", "Could not save")
             }

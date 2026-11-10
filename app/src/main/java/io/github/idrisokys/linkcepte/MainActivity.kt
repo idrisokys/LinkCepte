@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -84,7 +85,7 @@ fun App(resume: Int = 0) {
     val scope = rememberCoroutineScope()
     val lock = remember { Mutex() }
     var root by remember { mutableStateOf(Store.root(ctx)) }
-    LaunchedEffect(resume) { root = Store.root(ctx) }   // izin başka yerden kaldırıldıysa klasör seçimi tekrar istenir
+    LaunchedEffect(resume) { root = Store.root(ctx) }   // izin verildi/kaldırıldıysa durum güncellenir
     var stack by remember { mutableStateOf(listOf<Entry>()) }
     var tick by remember { mutableIntStateOf(0) }
     var editMode by remember { mutableStateOf(false) }          // üstteki düzenle tuşu
@@ -108,29 +109,33 @@ fun App(resume: Int = 0) {
         scope.launch { lock.withLock { withContext(Dispatchers.IO) { block() } }; if (reload) tick++ }
     }
 
-    // Klasör seçimi: belirli bir uygulamaya (DocumentsUI) bağlı değil; ACTION_OPEN_DOCUMENT_TREE'yi
-    // destekleyen varsayılan/herhangi bir dosya yöneticisi kullanılabilir (seçici ile).
-    val pickFolderLauncher = rememberLauncherForActivityResult(PickFolderContract()) { uri: Uri? ->
-        if (uri != null) {
-            if (Store.setRoot(ctx, uri)) { root = Store.root(ctx); stack = emptyList(); tick++ }
-            else toast(L("Bu klasöre yazılamıyor, başka bir klasör seçin", "Cannot write to this folder, choose another one"))
-        }
+    // Veriler sabit olarak <ana dizin>/QuickShare/Link içinde tutulur; klasör seçimi yoktur.
+    // Tek gereken depolama izni: Android 11+ "Tüm dosyalara erişim", daha eskilerde depolama izni.
+    val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        root = Store.root(ctx); tick++
     }
-    val pickFolder = object {
-        fun launch(@Suppress("UNUSED_PARAMETER") x: Uri?) {
-            try { pickFolderLauncher.launch(null) }
+    fun requestAccess() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            val pkg = Uri.parse("package:" + ctx.packageName)
+            try { ctx.startActivity(Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, pkg)) }
             catch (e: Exception) {
-                toast(L("Klasör seçmek için uyumlu bir dosya yöneticisi bulunamadı", "No compatible file manager found to pick a folder"))
+                try { ctx.startActivity(Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)) }
+                catch (e2: Exception) { toast(L("İzin ekranı açılamadı", "Could not open permission screen")) }
             }
-        }
+        } else permLauncher.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
     }
+    // İzin yoksa açılışta bir kez otomatik istenir
+    var asked by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(root) { if (root == null && !asked) { asked = true; requestAccess() } }
 
     // İçerik klasörünü varsayılan dosya yöneticisinde açar
     fun openContentFolder(dir: Uri) {
+        val doc = Store.documentUri(dir)
+        if (doc == null) { toast(L("Klasör açılamadı", "Could not open folder")); return }
         val tryIntents = listOf(
-            Intent(Intent.ACTION_VIEW).setDataAndType(dir, android.provider.DocumentsContract.Document.MIME_TYPE_DIR),
-            Intent(Intent.ACTION_VIEW).setDataAndType(dir, "vnd.android.document/directory"),
-            Intent(Intent.ACTION_VIEW).setData(dir)
+            Intent(Intent.ACTION_VIEW).setDataAndType(doc, android.provider.DocumentsContract.Document.MIME_TYPE_DIR),
+            Intent(Intent.ACTION_VIEW).setDataAndType(doc, "vnd.android.document/directory"),
+            Intent(Intent.ACTION_VIEW).setData(doc)
         )
         for (i in tryIntents) {
             i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -144,9 +149,10 @@ fun App(resume: Int = 0) {
         Column(Modifier.fillMaxSize().padding(24.dp), Arrangement.Center, Alignment.CenterHorizontally) {
             Text("Link Cepte", style = MaterialTheme.typography.headlineMedium)
             Spacer(Modifier.height(12.dp))
-            Text(L("Linklerin kaydedileceği klasörü seçin.", "Choose the folder where links will be saved."))
+            Text(L("Linkler QuickShare/Link klasörüne kaydedilir. Bunun için depolama erişim izni gerekir.",
+                "Links are saved to the QuickShare/Link folder. Storage access permission is required."))
             Spacer(Modifier.height(16.dp))
-            Button(onClick = { pickFolder.launch(null) }) { Text(L("Klasör seç", "Choose folder")) }
+            Button(onClick = { requestAccess() }) { Text(L("İzin ver", "Grant permission")) }
         }
         return
     }
@@ -649,16 +655,4 @@ fun SearchResults(pad: PaddingValues, hits: List<Hit>?, onOpen: (Entry) -> Unit,
             }
         }
     }
-}
-
-/** Klasör seçimini Android'in sistem klasör seçicisi üzerinden başlatır. */
-class PickFolderContract : androidx.activity.result.contract.ActivityResultContract<Void?, Uri?>() {
-    override fun createIntent(context: android.content.Context, input: Void?): Intent {
-        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(
-            Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
-                Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or Intent.FLAG_GRANT_PREFIX_URI_PERMISSION)
-        return Intent.createChooser(intent, L("Klasör seç", "Choose folder"))
-    }
-    override fun parseResult(resultCode: Int, intent: Intent?): Uri? =
-        if (resultCode == android.app.Activity.RESULT_OK) intent?.data else null
 }

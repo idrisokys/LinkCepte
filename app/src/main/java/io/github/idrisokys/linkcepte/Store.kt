@@ -1,15 +1,12 @@
 package io.github.idrisokys.linkcepte
 
 import android.content.Context
-import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
-import android.provider.DocumentsContract as DC
-import java.io.InputStream
-import java.io.OutputStream
+import android.os.Build
+import android.os.Environment
+import java.io.File
 import java.net.HttpURLConnection
-import java.util.zip.ZipEntry
-import java.util.zip.ZipInputStream
-import java.util.zip.ZipOutputStream
 import java.net.URL
 
 data class Entry(val name: String, val uri: Uri, val isDir: Boolean) {
@@ -27,30 +24,37 @@ data class Hit(val entry: Entry, val path: List<Entry>, val detail: String, val 
 
 object Store {
     private const val ORDER = ".order.txt"
-    private const val OCTET = "application/octet-stream"
-    private const val FLAGS = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+
+    /** Tüm veriler dahili depolamanın ana dizininde: <ana dizin>/QuickShare/Link */
+    private const val PARENT_DIR = "QuickShare"
+    private const val DATA_DIR = "Link"
 
     /** Tüm yazma/okuma işlemleri (uygulama + paylaşım ekranı) bu kilitle sıralanır. */
     private val mutex = Any()
 
-    private fun tree(ctx: Context): Uri? =
-        ctx.getSharedPreferences("p", 0).getString("root", null)?.let { Uri.parse(it) }
+    private fun file(u: Uri): File = File(u.path ?: "")
+    private fun uriOf(f: File): Uri = Uri.fromFile(f)
 
-    /** Seçili kök klasörün belge Uri'si; izin yoksa null. */
+    /** Depolama erişim izni verilmiş mi? (Android 11+: "Tüm dosyalara erişim", daha eskilerde: depolama izni) */
+    fun hasAccess(ctx: Context): Boolean =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Environment.isExternalStorageManager()
+        else ctx.checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+
+    /** Veri klasörünün (QuickShare/Link) Uri'si; klasör yoksa oluşturulur. İzin yoksa null. */
     fun root(ctx: Context): Uri? {
-        val t = tree(ctx) ?: return null
-        val ok = ctx.contentResolver.persistedUriPermissions.any { it.uri == t && it.isWritePermission }
-        return if (ok) DC.buildDocumentUriUsingTree(t, DC.getTreeDocumentId(t)) else null
+        if (!hasAccess(ctx)) return null
+        val d = File(File(Environment.getExternalStorageDirectory(), PARENT_DIR), DATA_DIR)
+        if (!d.isDirectory && !d.mkdirs() && !d.isDirectory) return null
+        return uriOf(d)
     }
 
-    fun setRoot(ctx: Context, uri: Uri): Boolean {
-        val old = tree(ctx)
-        try { ctx.contentResolver.takePersistableUriPermission(uri, FLAGS) } catch (e: Exception) { return false }
-        ctx.getSharedPreferences("p", 0).edit().putString("root", uri.toString()).apply()
-        if (old != null && old != uri) {
-            try { ctx.contentResolver.releasePersistableUriPermission(old, FLAGS) } catch (e: Exception) { }
-        }
-        return root(ctx) != null
+    /** Dosya yöneticisinde açmak için: Uri'yi harici depolama belge Uri'sine çevirir. */
+    fun documentUri(dir: Uri): Uri? {
+        val base = Environment.getExternalStorageDirectory().absolutePath
+        val p = dir.path ?: return null
+        if (!p.startsWith(base)) return null
+        val rel = p.removePrefix(base).trim('/')
+        return android.provider.DocumentsContract.buildDocumentUri("com.android.externalstorage.documents", "primary:$rel")
     }
 
     private val WS = Regex("\\s+")
@@ -81,81 +85,60 @@ object Store {
     }
 
     /** Tek sorguyla klasörün tüm içeriği; sorgu başarısız olursa null (boş klasörden ayırt edilir). */
-    private fun childrenOrNull(ctx: Context, dir: Uri): List<Entry>? {
-        val t = tree(ctx) ?: return null
-        val q = DC.buildChildDocumentsUriUsingTree(t, DC.getDocumentId(dir))
-        val out = ArrayList<Entry>()
-        return try {
-            val cols = arrayOf(DC.Document.COLUMN_DOCUMENT_ID, DC.Document.COLUMN_DISPLAY_NAME, DC.Document.COLUMN_MIME_TYPE)
-            val c = ctx.contentResolver.query(q, cols, null, null, null) ?: return null
-            c.use {
-                while (it.moveToNext()) {
-                    val id = it.getString(0) ?: continue
-                    val name = it.getString(1) ?: continue
-                    out.add(Entry(name, DC.buildDocumentUriUsingTree(t, id), it.getString(2) == DC.Document.MIME_TYPE_DIR))
-                }
-            }
-            out
-        } catch (e: Exception) { null }
+    /** Tek sorguyla klasörün tüm içeriği; okunamazsa null (boş klasörden ayırt edilir). */
+    private fun childrenOrNull(dir: Uri): List<Entry>? {
+        val fs = file(dir).listFiles() ?: return null
+        return fs.map { Entry(it.name, uriOf(it), it.isDirectory) }
     }
 
-    private fun children(ctx: Context, dir: Uri): List<Entry> = childrenOrNull(ctx, dir) ?: emptyList()
+    private fun children(dir: Uri): List<Entry> = childrenOrNull(dir) ?: emptyList()
 
-    private fun ordered(ctx: Context, all: List<Entry>): List<Entry> {
+    private fun ordered(all: List<Entry>): List<Entry> {
         val files = all.filter { !it.name.startsWith(".") && (it.isDir || it.name.endsWith(".url", true) || it.name.endsWith(".txt", true)) }
         val byName = files.associateBy { it.name }
-        val ord = readOrder(ctx, all).distinct().mapNotNull { byName[it] }
+        val ord = readOrder(all).distinct().mapNotNull { byName[it] }
         val seen = ord.mapTo(HashSet()) { it.name }
         val rest = files.filter { it.name !in seen }.sortedWith(compareBy({ !it.isDir }, { it.name.lowercase() }))
         return ord + rest
     }
 
-    fun list(ctx: Context, dir: Uri): List<Entry> = synchronized(mutex) { ordered(ctx, children(ctx, dir)) }
+    fun list(ctx: Context, dir: Uri): List<Entry> = synchronized(mutex) { ordered(children(dir)) }
 
-    private fun readOrder(ctx: Context, all: List<Entry>): List<String> {
+    private fun readOrder(all: List<Entry>): List<String> {
         val f = all.firstOrNull { it.name == ORDER } ?: return emptyList()
-        return try {
-            ctx.contentResolver.openInputStream(f.uri)?.bufferedReader()?.use { r -> r.readLines().filter { it.isNotBlank() } } ?: emptyList()
-        } catch (e: Exception) { emptyList() }
+        return try { file(f.uri).readLines().filter { it.isNotBlank() } } catch (e: Exception) { emptyList() }
     }
 
-    private fun saveOrderIn(ctx: Context, dir: Uri, names: List<String>, all: List<Entry>) {
-        try {
-            val f = all.firstOrNull { it.name == ORDER }?.uri
-                ?: DC.createDocument(ctx.contentResolver, dir, "text/plain", ORDER) ?: return
-            ctx.contentResolver.openOutputStream(f, "wt")?.use { it.write(names.joinToString("\n").toByteArray()) }
-        } catch (e: Exception) { }
+    private fun saveOrderIn(dir: Uri, names: List<String>) {
+        try { File(file(dir), ORDER).writeText(names.joinToString("\n")) } catch (e: Exception) { }
     }
 
     fun saveOrder(ctx: Context, dir: Uri, names: List<String>) = synchronized(mutex) {
-        // Klasör okunamadıysa sıralama dosyası yeniden oluşturulmaz (aynı adlı kopya / sıra kaybı olmasın).
-        val all = childrenOrNull(ctx, dir)
-        if (all != null) saveOrderIn(ctx, dir, names, all)
+        // Klasör okunamadıysa sıralama dosyası yeniden yazılmaz.
+        if (childrenOrNull(dir) != null) saveOrderIn(dir, names)
     }
 
-    private fun write(ctx: Context, dir: Uri, base: String, bytes: ByteArray, max: Int = 220, ext: String = ".url"): Boolean = synchronized(mutex) {
+    private fun write(dir: Uri, base: String, bytes: ByteArray, max: Int = 220, ext: String = ".url"): Boolean = synchronized(mutex) {
         try {
-            val all = childrenOrNull(ctx, dir) ?: return false
+            val all = childrenOrNull(dir) ?: return false
             val taken = all.mapTo(HashSet()) { it.name.lowercase() }
             val b = clean(base, max)
             var name = "$b$ext"; var i = 2
             while (name.lowercase() in taken) { name = "$b ($i)$ext"; i++ }
-            val f = DC.createDocument(ctx.contentResolver, dir, if (ext == ".txt") "text/plain" else OCTET, name) ?: return false
-            ctx.contentResolver.openOutputStream(f, "w")?.use { it.write(bytes) } ?: return false
+            File(file(dir), name).writeBytes(bytes)
             // Yeni öğe listenin sonuna eklenir; mevcut sıra korunur.
-            val names = ordered(ctx, all).map { it.name } + name
-            saveOrderIn(ctx, dir, names, all)
+            saveOrderIn(dir, ordered(all).map { it.name } + name)
             true
         } catch (e: Exception) { false }
     }
 
     fun addLink(ctx: Context, dir: Uri, title: String, url: String): Boolean =
-        write(ctx, dir, title, "[InternetShortcut]\r\nURL=$url\r\n".toByteArray())
+        write(dir, title, "[InternetShortcut]\r\nURL=$url\r\n".toByteArray())
 
     /** Düz metni de kaydeder (URL olmayan kayıt). */
     fun addNote(ctx: Context, dir: Uri, text: String): Boolean {
         val title = text.replace(WS, " ").trim().ifBlank { "not" }
-        return write(ctx, dir, title, noteBytes(text))
+        return write(dir, title, noteBytes(text))
     }
 
     private fun noteBytes(text: String): ByteArray {
@@ -166,19 +149,17 @@ object Store {
     /** Metni, uzunluk sınırı olmadan düz .txt dosyası olarak kaydeder; ad metnin ilk 100 karakteridir. */
     fun addTextFile(ctx: Context, dir: Uri, text: String): Boolean {
         val title = text.replace(WS, " ").trim().ifBlank { "not" }
-        return write(ctx, dir, title, text.toByteArray(Charsets.UTF_8), 100, ".txt")
+        return write(dir, title, text.toByteArray(Charsets.UTF_8), 100, ".txt")
     }
 
     /** .txt dosyasının tamamını okur. */
     fun readPlain(ctx: Context, uri: Uri): String? = try {
-        ctx.contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }?.removePrefix("\uFEFF")
+        file(uri).readText(Charsets.UTF_8).removePrefix("\uFEFF")
     } catch (e: Exception) { null }
 
     /** Mevcut .txt dosyasının içeriğini baştan yazar (dosya adı değişmez). */
     fun writePlain(ctx: Context, uri: Uri, text: String): Boolean = synchronized(mutex) {
-        try {
-            ctx.contentResolver.openOutputStream(uri, "wt")?.use { it.write(text.toByteArray(Charsets.UTF_8)) } != null
-        } catch (e: Exception) { false }
+        try { file(uri).writeText(text, Charsets.UTF_8); true } catch (e: Exception) { false }
     }
 
     /** Metindeki ilk linki bulur; sondaki noktalama işaretlerini atar. */
@@ -207,53 +188,41 @@ object Store {
 
     fun moveLink(ctx: Context, e: Entry, target: Uri): Boolean = synchronized(mutex) {
         try {
-            val bytes = ctx.contentResolver.openInputStream(e.uri)?.use { it.readBytes() } ?: return false
-            if (!write(ctx, target, e.title, bytes, 220, e.ext)) return false
-            DC.deleteDocument(ctx.contentResolver, e.uri)
+            val bytes = file(e.uri).readBytes()
+            if (!write(target, e.title, bytes, 220, e.ext)) return false
+            file(e.uri).delete()
         } catch (ex: Exception) { false }
-    }
-
-    /** Klasörü (içindekilerle birlikte) kopyalar. */
-    private fun copyTree(ctx: Context, src: Entry, targetDir: Uri, newName: String): Boolean {
-        val dst = DC.createDocument(ctx.contentResolver, targetDir, DC.Document.MIME_TYPE_DIR, newName) ?: return false
-        for (c in children(ctx, src.uri)) {
-            if (c.isDir) { if (!copyTree(ctx, c, dst, c.name)) return false; continue }
-            val bytes = ctx.contentResolver.openInputStream(c.uri)?.use { it.readBytes() } ?: return false
-            val f = DC.createDocument(ctx.contentResolver, dst, if (c.name == ORDER) "text/plain" else OCTET, c.name) ?: return false
-            ctx.contentResolver.openOutputStream(f, "w")?.use { it.write(bytes) } ?: return false
-        }
-        return true
     }
 
     /** Link ya da klasörü başka klasöre taşır. [from] öğenin şu an bulunduğu klasördür. */
     fun moveEntry(ctx: Context, e: Entry, from: Uri, target: Uri): Boolean = synchronized(mutex) {
         if (!e.isDir) return moveLink(ctx, e, target)
         try {
-            val all = children(ctx, target)
+            val all = children(target)
             val taken = all.mapTo(HashSet()) { it.name.lowercase() }
             var name = e.name
-            var moved = false
-            if (name.lowercase() !in taken) {
-                moved = try { DC.moveDocument(ctx.contentResolver, e.uri, from, target) != null } catch (ex: Exception) { false }
+            var i = 2
+            while (name.lowercase() in taken) { name = "${e.name} ($i)"; i++ }
+            val src = file(e.uri)
+            val dst = File(file(target), name)
+            // Hedef kaynağın içindeyse taşıma yapılmaz.
+            if (dst.canonicalPath.startsWith(src.canonicalPath + File.separator)) return false
+            if (!src.renameTo(dst)) {
+                if (!src.copyRecursively(dst, overwrite = false)) return false
+                src.deleteRecursively()
             }
-            if (!moved) {
-                var i = 2
-                while (name.lowercase() in taken) { name = "${e.name} ($i)"; i++ }
-                if (!copyTree(ctx, e, target, name)) return false
-                DC.deleteDocument(ctx.contentResolver, e.uri)
-            }
-            saveOrderIn(ctx, target, ordered(ctx, all).map { it.name } + name, children(ctx, target))
+            saveOrderIn(target, ordered(all).map { it.name } + name)
             true
         } catch (ex: Exception) { false }
     }
 
     fun addFolder(ctx: Context, dir: Uri, name: String) = synchronized(mutex) {
         try {
-            val all = children(ctx, dir)
+            val all = children(dir)
             val base = clean(name)
             var n = base; var i = 2
             while (all.any { it.name.equals(n, true) }) { n = "$base ($i)"; i++ }
-            DC.createDocument(ctx.contentResolver, dir, DC.Document.MIME_TYPE_DIR, n)
+            File(file(dir), n).mkdir()
             Unit
         } catch (e: Exception) { }
     }
@@ -263,30 +232,29 @@ object Store {
         try {
             val base = clean(title, 220)
             val newName = if (e.isDir) base else base + e.ext
-            val all = children(ctx, dir)
+            val all = children(dir)
             // Kısa metin (not) ise: kopyalanan içerik de yeni ada uysun diye dosya içeriği güncellenir
-            val isNote = !e.isDir && !e.isTxt && textOf(lines(ctx, e.uri)) != null
+            val isNote = !e.isDir && !e.isTxt && textOf(lines(e.uri)) != null
             if (newName == e.name) {
-                if (isNote) ctx.contentResolver.openOutputStream(e.uri, "wt")?.use { it.write(noteBytes(title.trim())) }
+                if (isNote) file(e.uri).writeBytes(noteBytes(title.trim()))
                 return true
             }
             if (all.any { it.name.equals(newName, true) && it.uri != e.uri }) return false
-            val order = ordered(ctx, all).map { it.name }
-            val renamed = DC.renameDocument(ctx.contentResolver, e.uri, newName) ?: return false
-            if (isNote) ctx.contentResolver.openOutputStream(renamed, "wt")?.use { it.write(noteBytes(title.trim())) }
-            saveOrderIn(ctx, dir, order.map { if (it == e.name) newName else it }, all)
+            val order = ordered(all).map { it.name }
+            val dst = File(file(dir), newName)
+            if (!file(e.uri).renameTo(dst)) return false
+            if (isNote) dst.writeBytes(noteBytes(title.trim()))
+            saveOrderIn(dir, order.map { if (it == e.name) newName else it })
             true
         } catch (ex: Exception) { false }
     }
 
     fun delete(ctx: Context, uri: Uri) = synchronized(mutex) {
-        try { DC.deleteDocument(ctx.contentResolver, uri); Unit } catch (e: Exception) { }
+        try { file(uri).deleteRecursively(); Unit } catch (e: Exception) { }
     }
 
-    private fun lines(ctx: Context, uri: Uri): List<String> = try {
-        ctx.contentResolver.openInputStream(uri)?.bufferedReader()?.use { r ->
-            r.readLines().map { it.trim().removePrefix("\uFEFF") }
-        } ?: emptyList()
+    private fun lines(uri: Uri): List<String> = try {
+        file(uri).readLines().map { it.trim().removePrefix("\uFEFF") }
     } catch (e: Exception) { emptyList() }
 
     private fun urlOf(ls: List<String>): String? =
@@ -297,7 +265,7 @@ object Store {
 
     /** Dosyayı bir kez okuyup (link, metin) çiftini döndürür. */
     fun readLink(ctx: Context, uri: Uri): Pair<String?, String?> {
-        val ls = lines(ctx, uri)
+        val ls = lines(uri)
         return urlOf(ls) to textOf(ls)
     }
 
@@ -341,7 +309,7 @@ object Store {
         walk(root, emptyList())
 
         fun match(e: Entry, path: List<Entry>): Hit? {
-            val ls = if (e.isTxt) emptyList() else lines(ctx, e.uri)
+            val ls = if (e.isTxt) emptyList() else lines(e.uri)
             val url = urlOf(ls)
             val text = if (e.isTxt) readPlain(ctx, e.uri) ?: "" else textOf(ls) ?: ""
             val ft = fold(e.title)
