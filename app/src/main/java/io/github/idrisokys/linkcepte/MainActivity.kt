@@ -142,11 +142,35 @@ fun App(resume: Int = 0) {
         }
     }
 
-    val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
+    // Klasör seçimi: belirli bir uygulamaya (DocumentsUI) bağlı değil; ACTION_OPEN_DOCUMENT_TREE'yi
+    // destekleyen varsayılan/herhangi bir dosya yöneticisi kullanılabilir (seçici ile).
+    val pickFolderLauncher = rememberLauncherForActivityResult(PickFolderContract()) { uri: Uri? ->
         if (uri != null) {
             if (Store.setRoot(ctx, uri)) { root = Store.root(ctx); stack = emptyList(); tick++ }
             else toast(L("Bu klasöre yazılamıyor, başka bir klasör seçin", "Cannot write to this folder, choose another one"))
         }
+    }
+    val pickFolder = object {
+        fun launch(@Suppress("UNUSED_PARAMETER") x: Uri?) {
+            try { pickFolderLauncher.launch(null) }
+            catch (e: Exception) {
+                toast(L("Klasör seçmek için uyumlu bir dosya yöneticisi bulunamadı", "No compatible file manager found to pick a folder"))
+            }
+        }
+    }
+
+    // İçerik klasörünü varsayılan dosya yöneticisinde açar
+    fun openContentFolder(dir: Uri) {
+        val tryIntents = listOf(
+            Intent(Intent.ACTION_VIEW).setDataAndType(dir, android.provider.DocumentsContract.Document.MIME_TYPE_DIR),
+            Intent(Intent.ACTION_VIEW).setDataAndType(dir, "vnd.android.document/directory"),
+            Intent(Intent.ACTION_VIEW).setData(dir)
+        )
+        for (i in tryIntents) {
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+            try { ctx.startActivity(i); return } catch (e: Exception) { }
+        }
+        toast(L("Klasör açılamadı: uyumlu bir dosya yöneticisi bulunamadı", "Could not open folder: no compatible file manager found"))
     }
 
     val rootUri = root
@@ -354,6 +378,7 @@ fun App(resume: Int = 0) {
                     keyboardActions = KeyboardActions(onSend = { submit() }))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     val canAdd = linkText.isNotBlank()
+                    IconButton({ openContentFolder(current) }) { Icon(Icons.Default.FolderOpen, L("İçerik klasörünü aç", "Open content folder")) }
                     Text("${linkText.length}/$addMax", style = MaterialTheme.typography.labelSmall, color = if (linkText.length > addMax) MaterialTheme.colorScheme.error else Color.Unspecified, modifier = Modifier.padding(start = 8.dp))
                     Spacer(Modifier.weight(1f))
                     Box(
@@ -668,4 +693,16 @@ fun SearchResults(pad: PaddingValues, hits: List<Hit>?, onOpen: (Entry) -> Unit,
             }
         }
     }
+}
+
+/** ACTION_OPEN_DOCUMENT_TREE'yi seçici ile başlatır; DocumentsUI şart değildir. */
+class PickFolderContract : androidx.activity.result.contract.ActivityResultContract<Void?, Uri?>() {
+    override fun createIntent(context: android.content.Context, input: Void?): Intent {
+        val i = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(
+            Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
+                Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or Intent.FLAG_GRANT_PREFIX_URI_PERMISSION)
+        return Intent.createChooser(i, L("Klasör seç", "Choose folder"))
+    }
+    override fun parseResult(resultCode: Int, intent: Intent?): Uri? =
+        if (resultCode == android.app.Activity.RESULT_OK) intent?.data else null
 }
