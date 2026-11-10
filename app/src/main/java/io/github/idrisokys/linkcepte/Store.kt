@@ -80,23 +80,26 @@ object Store {
         return s.substring(0, i)
     }
 
-    /** Tek sorguyla klasörün tüm içeriği. */
-    private fun children(ctx: Context, dir: Uri): List<Entry> {
-        val t = tree(ctx) ?: return emptyList()
+    /** Tek sorguyla klasörün tüm içeriği; sorgu başarısız olursa null (boş klasörden ayırt edilir). */
+    private fun childrenOrNull(ctx: Context, dir: Uri): List<Entry>? {
+        val t = tree(ctx) ?: return null
         val q = DC.buildChildDocumentsUriUsingTree(t, DC.getDocumentId(dir))
         val out = ArrayList<Entry>()
-        try {
+        return try {
             val cols = arrayOf(DC.Document.COLUMN_DOCUMENT_ID, DC.Document.COLUMN_DISPLAY_NAME, DC.Document.COLUMN_MIME_TYPE)
-            ctx.contentResolver.query(q, cols, null, null, null)?.use { c ->
-                while (c.moveToNext()) {
-                    val id = c.getString(0) ?: continue
-                    val name = c.getString(1) ?: continue
-                    out.add(Entry(name, DC.buildDocumentUriUsingTree(t, id), c.getString(2) == DC.Document.MIME_TYPE_DIR))
+            val c = ctx.contentResolver.query(q, cols, null, null, null) ?: return null
+            c.use {
+                while (it.moveToNext()) {
+                    val id = it.getString(0) ?: continue
+                    val name = it.getString(1) ?: continue
+                    out.add(Entry(name, DC.buildDocumentUriUsingTree(t, id), it.getString(2) == DC.Document.MIME_TYPE_DIR))
                 }
             }
-        } catch (e: Exception) { }
-        return out
+            out
+        } catch (e: Exception) { null }
     }
+
+    private fun children(ctx: Context, dir: Uri): List<Entry> = childrenOrNull(ctx, dir) ?: emptyList()
 
     private fun ordered(ctx: Context, all: List<Entry>): List<Entry> {
         val files = all.filter { !it.name.startsWith(".") && (it.isDir || it.name.endsWith(".url", true) || it.name.endsWith(".txt", true)) }
@@ -125,12 +128,14 @@ object Store {
     }
 
     fun saveOrder(ctx: Context, dir: Uri, names: List<String>) = synchronized(mutex) {
-        saveOrderIn(ctx, dir, names, children(ctx, dir))
+        // Klasör okunamadıysa sıralama dosyası yeniden oluşturulmaz (aynı adlı kopya / sıra kaybı olmasın).
+        val all = childrenOrNull(ctx, dir)
+        if (all != null) saveOrderIn(ctx, dir, names, all)
     }
 
     private fun write(ctx: Context, dir: Uri, base: String, bytes: ByteArray, max: Int = 220, ext: String = ".url"): Boolean = synchronized(mutex) {
         try {
-            val all = children(ctx, dir)
+            val all = childrenOrNull(ctx, dir) ?: return false
             val taken = all.mapTo(HashSet()) { it.name.lowercase() }
             val b = clean(base, max)
             var name = "$b$ext"; var i = 2

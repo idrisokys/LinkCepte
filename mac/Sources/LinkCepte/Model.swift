@@ -257,7 +257,9 @@ final class Model: ObservableObject {
             }
             let (u, t) = await self.io { Store.readLink(e.url) }
             if let u = u {
-                if let link = Store.makeURL(u), NSWorkspace.shared.open(link) { return }
+                // Yerel dosya / uygulama çalıştıran şemalar açılmaz (elle yazılmış veya geri yüklenmiş .url dosyalarına karşı)
+                if let link = Store.makeURL(u), !["file", "javascript"].contains(link.scheme?.lowercased() ?? ""),
+                   NSWorkspace.shared.open(link) { return }
                 self.toast(L("Link açılamadı", "Couldn't open the link"))
             } else if let t = t {
                 self.noteText = t

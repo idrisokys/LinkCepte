@@ -60,6 +60,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 private val DarkScheme = darkColorScheme()
+private val blockedSchemes = setOf("file", "content", "intent", "javascript", "android-app")
 
 class MainActivity : ComponentActivity() {
     private val resumes = mutableIntStateOf(0)
@@ -250,7 +251,12 @@ fun App(resume: Int = 0) {
                 if (t != null) { clipboard.setText(AnnotatedString(t)); toast(L("Kopyalandı", "Copied")) }
                 else toast(L("Link okunamadı", "Could not read link"))
             }
-            else try { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u))) } catch (ex: Exception) { toast(L("Link açılamadı", "Could not open link")) }
+            else {
+                val uri = Uri.parse(u)
+                // Yerel dosya / uygulama içi şemalar açılmaz (elle yazılmış veya geri yüklenmiş .url dosyalarına karşı)
+                if (uri.scheme == null || uri.scheme!!.lowercase() in blockedSchemes) toast(L("Link açılamadı", "Could not open link"))
+                else try { ctx.startActivity(Intent(Intent.ACTION_VIEW, uri)) } catch (ex: Exception) { toast(L("Link açılamadı", "Could not open link")) }
+            }
         }
     }
     // Satıra uzun basınca metni doğrudan panoya kopyalar (.txt: içerik, link: adres, not: metin, klasör: ad)

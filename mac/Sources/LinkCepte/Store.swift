@@ -165,7 +165,7 @@ enum Store {
 
     private static func saveOrderIn(_ dir: URL, _ names: [String]) {
         let data = Data(names.joined(separator: "\n").utf8)
-        try? data.write(to: dir.appendingPathComponent(ORDER))
+        try? data.write(to: dir.appendingPathComponent(ORDER), options: .atomic)   // yarım yazılmış sıra dosyası kalmasın
     }
 
     static func saveOrder(_ dir: URL, _ names: [String]) {
@@ -183,7 +183,7 @@ enum Store {
         var name = b + ext
         var i = 2
         while taken.contains(norm(name)) { name = "\(b) (\(i))\(ext)"; i += 1 }
-        do { try data.write(to: dir.appendingPathComponent(name)) } catch { return false }
+        do { try data.write(to: dir.appendingPathComponent(name), options: .atomic) } catch { return false }
         // Yeni öğe listenin sonuna eklenir; mevcut sıra korunur.
         saveOrderIn(dir, ordered(all).map { $0.name } + [name])
         return true
