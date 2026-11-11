@@ -79,22 +79,14 @@ enum Store {
         return fm.fileExists(atPath: p, isDirectory: &isDir) && isDir.boolValue && fm.isWritableFile(atPath: p)
     }
 
-    /// Kök klasör: daha önce elle seçilmiş geçerli bir klasör varsa o, yoksa ~/Link (gerekirse oluşturulur).
-    /// İkisi de kullanılamıyorsa nil.
+    /// Kök klasör: her zaman ~/Link (gerekirse oluşturulur). Oluşturulamaz ya da yazılamazsa nil.
     static var root: URL? {
-        if let p = defaults.string(forKey: "root"), usable(p) { return URL(fileURLWithPath: p, isDirectory: true) }
         let d = defaultRoot
         if !usable(d.path) {
             try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
             if !usable(d.path) { return nil }
         }
         return d
-    }
-
-    static func setRoot(_ url: URL) -> Bool {
-        guard FileManager.default.isWritableFile(atPath: url.path) else { return false }
-        defaults.set(url.path, forKey: "root")
-        return root != nil
     }
 
     // MARK: - Ad temizleme

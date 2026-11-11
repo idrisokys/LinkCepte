@@ -36,7 +36,7 @@ Hazır sürümleri [Releases](https://github.com/idrisokys/LinkCepte/releases) s
 
 1. `LinkCepte-mac.zip` dosyasını indirip açın, uygulamayı **Uygulamalar** klasörüne taşıyın.
 2. Uygulama Apple Developer hesabıyla imzalanmadığı için ilk açılışta uygulamaya sağ tıklayıp **Aç**'ı seçin.
-3. Linkler varsayılan olarak ana dizindeki `~/Link` klasörüne kaydedilir (yoksa otomatik oluşturulur).
+3. Linkler varsayılan olarak ana dizindeki `~/Link` klasörüne kaydedilir (yoksa otomatik oluşturulur); klasör seçimi yoktur.
 
 ### Chrome eklentisi
 
@@ -112,7 +112,7 @@ Download ready-made builds from the [Releases](https://github.com/idrisokys/Link
 
 1. Download and unzip `LinkCepte-mac.zip`, then move the app to **Applications**.
 2. The app is not signed with an Apple Developer account, so on first launch right-click it and choose **Open**.
-3. Links are saved to `~/Link` in your home directory by default (created automatically if missing).
+3. Links are saved to `~/Link` in your home directory by default (created automatically if missing); there is no folder picker.
 
 ### Chrome extension
 

@@ -209,25 +209,6 @@ final class Model: ObservableObject {
         }
     }
 
-    func chooseFolder() {
-        let p = NSOpenPanel()
-        p.canChooseDirectories = true
-        p.canChooseFiles = false
-        p.canCreateDirectories = true
-        p.allowsMultipleSelection = false
-        p.prompt = L("Seç", "Choose")
-        p.message = L("Linklerin kaydedileceği klasörü seçin.", "Choose the folder where your links will be saved.")
-        if p.runModal() == .OK, let u = p.url {
-            if Store.setRoot(u) {
-                root = Store.root
-                txt = nil
-                setStack([])
-            } else {
-                toast(L("Bu klasöre yazılamıyor, başka bir klasör seçin", "Can't write to this folder, choose another one"))
-            }
-        }
-    }
-
     // MARK: - Satır işlemleri
 
     func tap(_ e: Entry) {
