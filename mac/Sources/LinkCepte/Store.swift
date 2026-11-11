@@ -68,13 +68,27 @@ enum Store {
 
     // MARK: - Kök klasör
 
-    /// Seçili kök klasör; yoksa veya yazılamıyorsa nil.
-    static var root: URL? {
-        guard let p = defaults.string(forKey: "root") else { return nil }
+    /// Varsayılan veri klasörü: <ana dizin>/Link (Android sürümüyle aynı).
+    static var defaultRoot: URL {
+        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Link", isDirectory: true)
+    }
+
+    private static func usable(_ p: String) -> Bool {
         var isDir: ObjCBool = false
         let fm = FileManager.default
-        guard fm.fileExists(atPath: p, isDirectory: &isDir), isDir.boolValue, fm.isWritableFile(atPath: p) else { return nil }
-        return URL(fileURLWithPath: p, isDirectory: true)
+        return fm.fileExists(atPath: p, isDirectory: &isDir) && isDir.boolValue && fm.isWritableFile(atPath: p)
+    }
+
+    /// Kök klasör: daha önce elle seçilmiş geçerli bir klasör varsa o, yoksa ~/Link (gerekirse oluşturulur).
+    /// İkisi de kullanılamıyorsa nil.
+    static var root: URL? {
+        if let p = defaults.string(forKey: "root"), usable(p) { return URL(fileURLWithPath: p, isDirectory: true) }
+        let d = defaultRoot
+        if !usable(d.path) {
+            try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
+            if !usable(d.path) { return nil }
+        }
+        return d
     }
 
     static func setRoot(_ url: URL) -> Bool {

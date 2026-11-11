@@ -25,9 +25,11 @@ data class Hit(val entry: Entry, val path: List<Entry>, val detail: String, val 
 object Store {
     private const val ORDER = ".order.txt"
 
-    /** Tüm veriler dahili depolamanın ana dizininde: <ana dizin>/QuickShare/Link */
-    private const val PARENT_DIR = "QuickShare"
+    /** Tüm veriler dahili depolamanın ana dizininde: <ana dizin>/Link */
     private const val DATA_DIR = "Link"
+
+    /** Eski sürümlerin kullandığı konum (<ana dizin>/QuickShare/Link); varsa yeni konuma taşınır. */
+    private const val LEGACY_PARENT_DIR = "QuickShare"
 
     /** Tüm yazma/okuma işlemleri (uygulama + paylaşım ekranı) bu kilitle sıralanır. */
     private val mutex = Any()
@@ -40,12 +42,32 @@ object Store {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) Environment.isExternalStorageManager()
         else ctx.checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
 
-    /** Veri klasörünün (QuickShare/Link) Uri'si; klasör yoksa oluşturulur. İzin yoksa null. */
+    /** Veri klasörünün (<ana dizin>/Link) Uri'si; klasör yoksa oluşturulur. İzin yoksa null. */
     fun root(ctx: Context): Uri? {
         if (!hasAccess(ctx)) return null
-        val d = File(File(Environment.getExternalStorageDirectory(), PARENT_DIR), DATA_DIR)
-        if (!d.isDirectory && !d.mkdirs() && !d.isDirectory) return null
+        val base = Environment.getExternalStorageDirectory()
+        val d = File(base, DATA_DIR)
+        synchronized(mutex) {
+            if (!d.exists()) migrateLegacy(base, d)
+            if (!d.isDirectory && !d.mkdirs() && !d.isDirectory) return null
+        }
         return uriOf(d)
+    }
+
+    /** Eski QuickShare/Link klasörü varsa ve yeni Link klasörü henüz yoksa, içeriğiyle birlikte yeni konuma taşır. */
+    private fun migrateLegacy(base: File, target: File) {
+        val parent = File(base, LEGACY_PARENT_DIR)
+        val old = File(parent, DATA_DIR)
+        if (!old.isDirectory) return
+        try {
+            if (!old.renameTo(target)) {
+                // Aynı bölümde değilse (nadir) kopyala, başarılıysa eskisini sil.
+                if (old.copyRecursively(target, overwrite = false)) old.deleteRecursively()
+                else target.deleteRecursively()   // yarım kalan kopyayı bırakma; veri eski yerinde kalır
+            }
+            // QuickShare klasörü boş kaldıysa kaldır (başka veri varsa dokunma).
+            if (parent.isDirectory && parent.list()?.isEmpty() == true) parent.delete()
+        } catch (e: Exception) { }
     }
 
     /** Dosya yöneticisinde açmak için: Uri'yi harici depolama belge Uri'sine çevirir. */
@@ -84,7 +106,6 @@ object Store {
         return s.substring(0, i)
     }
 
-    /** Tek sorguyla klasörün tüm içeriği; sorgu başarısız olursa null (boş klasörden ayırt edilir). */
     /** Tek sorguyla klasörün tüm içeriği; okunamazsa null (boş klasörden ayırt edilir). */
     private fun childrenOrNull(dir: Uri): List<Entry>? {
         val fs = file(dir).listFiles() ?: return null

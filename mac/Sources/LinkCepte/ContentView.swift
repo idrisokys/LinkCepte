@@ -22,7 +22,7 @@ struct WelcomeView: View {
     var body: some View {
         VStack(spacing: 14) {
             Text("Link Cepte").font(.largeTitle)
-            Text(L("Linklerin kaydedileceği klasörü seçin.", "Choose the folder where your links will be saved."))
+            Text(L("Linkler ana dizindeki Link klasörüne kaydedilir, ancak bu klasör oluşturulamadı. Başka bir klasör seçin.", "Links are saved to the Link folder in your home directory, but it could not be created. Choose another folder."))
             Button(L("Klasör seç", "Choose folder")) { m.chooseFolder() }
                 .keyboardShortcut(.defaultAction)
         }

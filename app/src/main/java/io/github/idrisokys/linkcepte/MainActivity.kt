@@ -109,7 +109,7 @@ fun App(resume: Int = 0) {
         scope.launch { lock.withLock { withContext(Dispatchers.IO) { block() } }; if (reload) tick++ }
     }
 
-    // Veriler sabit olarak <ana dizin>/QuickShare/Link içinde tutulur; klasör seçimi yoktur.
+    // Veriler sabit olarak <ana dizin>/Link içinde tutulur; klasör seçimi yoktur.
     // Tek gereken depolama izni: Android 11+ "Tüm dosyalara erişim", daha eskilerde depolama izni.
     val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         root = Store.root(ctx); tick++
@@ -133,8 +133,8 @@ fun App(resume: Int = 0) {
         Column(Modifier.fillMaxSize().padding(24.dp), Arrangement.Center, Alignment.CenterHorizontally) {
             Text("Link Cepte", style = MaterialTheme.typography.headlineMedium)
             Spacer(Modifier.height(12.dp))
-            Text(L("Linkler QuickShare/Link klasörüne kaydedilir. Bunun için depolama erişim izni gerekir.",
-                "Links are saved to the QuickShare/Link folder. Storage access permission is required."))
+            Text(L("Linkler ana dizindeki Link klasörüne kaydedilir. Bunun için depolama erişim izni gerekir.",
+                "Links are saved to the Link folder in the main directory. Storage access permission is required."))
             Spacer(Modifier.height(16.dp))
             Button(onClick = { requestAccess() }) { Text(L("İzin ver", "Grant permission")) }
         }
