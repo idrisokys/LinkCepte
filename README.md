@@ -30,13 +30,13 @@ Hazır sürümleri [Releases](https://github.com/idrisokys/LinkCepte/releases) s
 ### Android
 
 1. Releases sayfasından APK'yı indirip kurun.
-2. İlk açılışta "Tüm dosyalara erişim" iznini verin. Veriler dahili depolamada `QuickShare/Link` klasöründe tutulur.
+2. İlk açılışta "Tüm dosyalara erişim" iznini verin. Veriler dahili depolamanın ana dizinindeki `Link` klasöründe tutulur.
 
 ### macOS
 
 1. `LinkCepte-mac.zip` dosyasını indirip açın, uygulamayı **Uygulamalar** klasörüne taşıyın.
 2. Uygulama Apple Developer hesabıyla imzalanmadığı için ilk açılışta uygulamaya sağ tıklayıp **Aç**'ı seçin.
-3. Linklerin kaydedileceği klasörü seçin.
+3. Linkler varsayılan olarak ana dizindeki `~/Link` klasörüne kaydedilir (yoksa otomatik oluşturulur).
 
 ### Chrome eklentisi
 
@@ -106,13 +106,13 @@ Download ready-made builds from the [Releases](https://github.com/idrisokys/Link
 ### Android
 
 1. Download and install the APK from Releases.
-2. On first launch, grant the "All files access" permission. Data is stored in internal storage under `QuickShare/Link`.
+2. On first launch, grant the "All files access" permission. Data is stored in the `Link` folder in the main directory of internal storage.
 
 ### macOS
 
 1. Download and unzip `LinkCepte-mac.zip`, then move the app to **Applications**.
 2. The app is not signed with an Apple Developer account, so on first launch right-click it and choose **Open**.
-3. Choose the folder where links will be saved.
+3. Links are saved to `~/Link` in your home directory by default (created automatically if missing).
 
 ### Chrome extension
 
