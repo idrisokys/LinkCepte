@@ -277,6 +277,19 @@ fun App(resume: Int = 0) {
         if (clearText && linkText.trim() == searchQuery) linkText = ""
         searchQuery = null; hits = null
     }
+    // Yenile tuşu: Link klasörünü tekrar kontrol eder (silinmişse yeniden oluşturur), artık var olmayan klasörlerden çıkar, listeyi (arama açıksa aramayı) yeniden yükler
+    fun refreshAll() {
+        selected = emptySet()
+        root = Store.root(ctx)
+        stack = stack.takeWhile { java.io.File(it.uri.path ?: "").isDirectory }
+        val q = searchQuery
+        if (q != null) {
+            searchJob?.cancel(); hits = null
+            searchJob = scope.launch { hits = withContext(Dispatchers.IO) { Store.search(ctx, rootUri, q) { isActive } } }
+        }
+        tick++
+        toast(L("Yenilendi", "Refreshed"))
+    }
     fun deleteNow(items: List<Entry>) {
         selected = emptySet()
         run { items.forEach { Store.delete(ctx, it.uri) } }
@@ -375,6 +388,7 @@ fun App(resume: Int = 0) {
                 IconButton({ editMode = !editMode; selected = emptySet() }) {
                     Icon(if (editMode) Icons.Default.Done else Icons.Default.Edit, if (editMode) L("Düzenlemeyi bitir", "Done editing") else L("Düzenle", "Edit"))
                 }
+                IconButton({ refreshAll() }) { Icon(Icons.Default.Refresh, L("Yenile", "Refresh")) }
                 // En sağdaki bilgi (i) ikonu: küçük menü açar (gemi resmi, e-posta, GitHub adresi)
                 Box {
                     IconButton({ infoMenu = true }) { Icon(Icons.Default.Info, L("Bilgi", "Info")) }

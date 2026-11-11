@@ -64,6 +64,9 @@ struct MainView: View {
                     Button { m.toggleEdit() } label: { Image(systemName: m.editMode ? "checkmark" : "pencil") }
                         .help(m.editMode ? L("Düzenlemeyi bitir", "Done editing") : L("Düzenle", "Edit"))
                 }
+                // Yenile: Link klasörünü tekrar kontrol eder ve listeyi yeniden yükler
+                Button { m.refresh() } label: { Image(systemName: "arrow.clockwise") }
+                    .help(L("Yenile", "Refresh"))
                 // En sağda: bilgi (i) ikonu; küçük menü açar
                 InfoButton()
             }
