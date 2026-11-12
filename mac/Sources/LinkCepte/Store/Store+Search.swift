@@ -11,25 +11,28 @@ private final class HitBox {
 extension Store {
     // MARK: - Arama
 
-    private static func foldChars(_ s: String) -> [Character] {
-        s.map { c -> Character in
+    /// Büyük/küçük harf, Türkçe i/ı/İ/I ve aksan (ş→s, ğ→g, é→e...) farkını yok sayar.
+    static func fold(_ s: String) -> String {
+        var out = String.UnicodeScalarView()
+        for c in s {
             switch c {
-            case "İ", "ı": return "i"
-            case "ş", "Ş": return "s"
-            case "ğ", "Ğ": return "g"
-            case "ü", "Ü": return "u"
-            case "ö", "Ö": return "o"
-            case "ç", "Ç": return "c"
+            case "İ", "ı": out.append("i")
+            case "ş", "Ş": out.append("s")
+            case "ğ", "Ğ": out.append("g")
+            case "ü", "Ü": out.append("u")
+            case "ö", "Ö": out.append("o")
+            case "ç", "Ç": out.append("c")
             default:
-                if c.isASCII { return Character(String(c).lowercased()) }
-                let d = String(c).decomposedStringWithCanonicalMapping
-                return String(d.first ?? c).lowercased().first ?? c
+                // Karakter (grapheme) değil, unicode scalar düzeyinde ayrıştır:
+                // "e" + birleşik aksan tek Character sayıldığı için aksan ancak böyle atılabilir.
+                for u in String(c).decomposedStringWithCanonicalMapping.unicodeScalars
+                where u.properties.generalCategory != .nonspacingMark {
+                    out.append(contentsOf: String(u).lowercased().unicodeScalars)
+                }
             }
         }
+        return String(out)
     }
-
-    /// Büyük/küçük harf, Türkçe i/ı/İ/I ve aksan (ş→s, ğ→g...) farkını yok sayar.
-    static func fold(_ s: String) -> String { String(foldChars(s)) }
 
     /// Tüm klasörlerde; başlık, link adresi ve not metninde arar. Yazılan her kelime bulunmalıdır.
     static func search(root: URL, query: String, alive: @escaping () -> Bool) -> [Hit] {
