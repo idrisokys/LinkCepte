@@ -43,6 +43,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.ui.input.key.Key
@@ -66,11 +67,35 @@ import kotlinx.coroutines.withContext
 private val DarkScheme = darkColorScheme()
 private val blockedSchemes = setOf("file", "content", "intent", "javascript", "android-app")
 
+const val ACTION_SEARCH = "io.github.idrisokys.linkcepte.SEARCH"
+const val EXTRA_QUERY = "query"
+
 class MainActivity : ComponentActivity() {
     private val resumes = mutableIntStateOf(0)
+    // Dışarıdan (ör. MyLauncher) gelen arama sorgusu; App tüketince null yapılır
+    private val externalQuery = mutableStateOf<String?>(null)
+
+    private fun readQuery(i: Intent?) {
+        if (i?.action == ACTION_SEARCH) {
+            i.getStringExtra(EXTRA_QUERY)?.trim()?.takeIf { it.isNotEmpty() }?.let { externalQuery.value = it }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { MaterialTheme(colorScheme = DarkScheme) { Surface(Modifier.fillMaxSize()) { App(resumes.intValue) } } }
+        if (savedInstanceState == null) readQuery(intent)
+        setContent {
+            MaterialTheme(colorScheme = DarkScheme) {
+                Surface(Modifier.fillMaxSize()) {
+                    App(resumes.intValue, externalQuery.value) { externalQuery.value = null }
+                }
+            }
+        }
+    }
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        readQuery(intent)
     }
     override fun onResume() {
         super.onResume()
@@ -80,7 +105,7 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-fun App(resume: Int = 0) {
+fun App(resume: Int = 0, extQuery: String? = null, onExtQueryConsumed: () -> Unit = {}) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val lock = remember { Mutex() }
@@ -260,9 +285,10 @@ fun App(resume: Int = 0) {
         val singleUrl = isUrl && text.none { it.isWhitespace() }
         if (tooLong && !singleUrl) addTxt() else addFromText()
     }
-    fun startSearch() {
-        val q = linkText.trim()
+    fun startSearch(query: String = linkText) {
+        val q = query.trim()
         if (q.isEmpty()) return
+        linkText = q
         focus.clearFocus()
         editMode = false; selected = emptySet()
         searchJob?.cancel()
@@ -271,6 +297,13 @@ fun App(resume: Int = 0) {
             val r = withContext(Dispatchers.IO) { Store.search(ctx, rootUri, q) { isActive } }
             hits = r
         }
+    }
+    // Dışarıdan gelen sorgu: klasör yığınını sıfırla ve aramayı doğrudan göster
+    LaunchedEffect(extQuery, rootUri) {
+        val q = extQuery ?: return@LaunchedEffect
+        stack = emptyList(); dialog = null; txtDoc = null
+        startSearch(q)
+        onExtQueryConsumed()
     }
     fun exitSearch(clearText: Boolean) {
         searchJob?.cancel()
@@ -513,7 +546,48 @@ fun TxtScreen(
     val focus = remember { FocusRequester() }
     val dirty = editing && value.text != saved
 
-    fun startEdit() { value = TextFieldValue(saved, TextRange(saved.length)); editing = true }
+    // ---- Metin içinde arama (okuma görünümü) ----
+    val readScroll = rememberScrollState()
+    var searching by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
+    var cur by remember { mutableIntStateOf(0) }
+    var layout by remember { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
+    val searchFocus = remember { FocusRequester() }
+    // Türkçe harfleri sadeleştirir (ı/İ→i, ş→s ...); uzunluğu korur, böylece indeksler metinle aynı kalır
+    fun fk(t: String) = String(CharArray(t.length) { i ->
+        when (val c = t[i]) { 'ı', 'İ', 'I' -> 'i'; 'ö', 'Ö' -> 'o'; 'ü', 'Ü' -> 'u'; 'ş', 'Ş' -> 's'; 'ç', 'Ç' -> 'c'; 'ğ', 'Ğ' -> 'g'; else -> c.lowercaseChar() }
+    })
+    val matches = remember(saved, query, searching) {
+        val q = fk(query.trim())
+        if (!searching || q.isEmpty()) emptyList() else {
+            val hay = fk(saved); val out = ArrayList<Int>(); var i = hay.indexOf(q)
+            while (i >= 0 && out.size < 5000) { out.add(i); i = hay.indexOf(q, i + q.length) }
+            out
+        }
+    }
+    LaunchedEffect(matches) { cur = 0 }
+    val qLen = query.trim().length
+    val hiAll = Color(0x55FFC107); val hiCur = Color(0xCCFF9800)
+    val shown = remember(saved, matches, cur, qLen) {
+        if (matches.isEmpty()) AnnotatedString(saved) else buildAnnotatedString {
+            append(saved)
+            matches.forEachIndexed { k, st ->
+                addStyle(androidx.compose.ui.text.SpanStyle(background = if (k == cur) hiCur else hiAll), st, minOf(saved.length, st + qLen))
+            }
+        }
+    }
+    fun go(d: Int) { if (matches.isNotEmpty()) cur = (cur + d + matches.size) % matches.size }
+    // Geçerli eşleşmeyi ekranın üst kısmına kaydır
+    LaunchedEffect(cur, matches, layout) {
+        val l = layout ?: return@LaunchedEffect
+        val st = matches.getOrNull(cur) ?: return@LaunchedEffect
+        val top = l.getLineTop(l.getLineForOffset(st.coerceAtMost(saved.length)))
+        readScroll.animateScrollTo((top - 160f).toInt().coerceAtLeast(0))
+    }
+    fun closeSearch() { searching = false; query = "" }
+    LaunchedEffect(searching) { if (searching) { delay(100); runCatching { searchFocus.requestFocus() } } }
+
+    fun startEdit() { searching = false; query = ""; value = TextFieldValue(saved, TextRange(saved.length)); editing = true }
     fun save() {
         if (saving) return
         saving = true
@@ -527,6 +601,7 @@ fun TxtScreen(
     }
     fun back() {
         when {
+            searching -> closeSearch()
             dirty -> askDiscard = true
             editing -> editing = false
             else -> onClose()
@@ -538,15 +613,34 @@ fun TxtScreen(
         Surface(Modifier.fillMaxSize()) {
             Scaffold(topBar = {
                 TopAppBar(
-                    title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    title = {
+                        if (searching && !editing) TextField(
+                            query, { query = it }, singleLine = true,
+                            placeholder = { Text(L("Metinde ara", "Search in text")) },
+                            modifier = Modifier.fillMaxWidth().focusRequester(searchFocus),
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                            keyboardActions = KeyboardActions(onSearch = { go(1) }))
+                        else Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    },
                     navigationIcon = { IconButton({ back() }) { Icon(Icons.Default.ArrowBack, L("Geri", "Back")) } },
                     actions = {
-                        if (editing) {
+                        if (searching && !editing) {
+                            if (query.isNotBlank()) Text(
+                                if (matches.isEmpty()) "0" else "${cur + 1}/${matches.size}",
+                                style = MaterialTheme.typography.labelLarge)
+                            IconButton({ go(-1) }, enabled = matches.isNotEmpty()) { Icon(Icons.Default.KeyboardArrowUp, L("Önceki", "Previous")) }
+                            IconButton({ go(1) }, enabled = matches.isNotEmpty()) { Icon(Icons.Default.KeyboardArrowDown, L("Sonraki", "Next")) }
+                            IconButton({ closeSearch() }) { Icon(Icons.Default.Close, L("Aramayı kapat", "Close search")) }
+                        } else if (editing) {
                             IconButton({ save() }, enabled = !saving) {
                                 Icon(Icons.Default.Save, L("Kaydet", "Save"), tint = MaterialTheme.colorScheme.primary)
                             }
                         } else {
                             IconButton({ onCopy(saved) }) { Icon(Icons.Default.ContentCopy, L("Kopyala", "Copy")) }
+                            IconButton({ searching = true }) { Icon(Icons.Default.Search, L("Ara", "Search")) }
                             IconButton({ startEdit() }) { Icon(Icons.Default.Edit, L("Düzenle", "Edit")) }
                         }
                     })
@@ -567,7 +661,8 @@ fun TxtScreen(
                     }
                 } else {
                     SelectionContainer {
-                        Text(saved, Modifier.padding(pad).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp))
+                        Text(shown, Modifier.padding(pad).fillMaxSize().verticalScroll(readScroll).padding(16.dp),
+                            onTextLayout = { layout = it })
                     }
                 }
             }
