@@ -5,6 +5,7 @@ let package = Package(
     name: "LinkCepte",
     platforms: [.macOS(.v13)],
     targets: [
-        .executableTarget(name: "LinkCepte", path: "Sources/LinkCepte")
+        .executableTarget(name: "LinkCepte", path: "Sources/LinkCepte"),
+        .testTarget(name: "LinkCepteTests", dependencies: ["LinkCepte"], path: "Tests/LinkCepteTests")
     ]
 )

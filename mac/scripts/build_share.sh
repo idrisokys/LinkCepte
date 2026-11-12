@@ -1,7 +1,12 @@
 #!/bin/bash
 # Paylaş eklentisini derleyip uygulamanın içine koyar. Kullanım: build_share.sh <LinkCepte.app>
+# (build_app.sh tarafından çağrılır; yol mac/ klasörüne göredir.)
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."   # mac/ klasörü
+
+# shellcheck source=../version.env
+source version.env
+
 APP="$1"
 X="$APP/Contents/PlugIns/LinkCepteShare.appex"
 mkdir -p "$X/Contents/MacOS" build
@@ -14,4 +19,6 @@ for a in arm64 x86_64; do
 done
 lipo -create build/share-arm64 build/share-x86_64 -output "$X/Contents/MacOS/LinkCepteShare"
 cp ShareExtension/Info.plist "$X/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $MARKETING_VERSION" "$X/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$X/Contents/Info.plist"
 codesign --force --sign - --entitlements ShareExtension/Share.entitlements "$X"

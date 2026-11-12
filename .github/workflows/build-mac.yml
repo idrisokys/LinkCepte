@@ -3,6 +3,8 @@ on:
   push:
     branches: [main]
     paths: ['mac/**', 'chrome-extension/**', '.github/workflows/build-mac.yml']
+  pull_request:
+    paths: ['mac/**', 'chrome-extension/**', '.github/workflows/build-mac.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -10,12 +12,19 @@ concurrency:
   group: build-mac-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  test:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift test --package-path mac
+
   build:
     runs-on: macos-15
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - run: bash mac/build_app.sh
+      - run: bash mac/scripts/build_app.sh
       - uses: actions/upload-artifact@v4
         with:
           name: LinkCepte-mac

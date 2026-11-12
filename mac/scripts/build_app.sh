@@ -1,9 +1,21 @@
 #!/bin/bash
 # Link Cepte Mac uygulamasını derler: mac/build/LinkCepte.app ve mac/build/LinkCepte-mac.zip
+# Kullanım: bash mac/scripts/build_app.sh   (her yerden çalıştırılabilir)
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."   # mac/ klasörü
+
+# shellcheck source=../version.env
+source version.env
 
 APP="build/LinkCepte.app"
+PLISTBUDDY=/usr/libexec/PlistBuddy
+
+# Info.plist'e sürümü yazar: set_version <plist>
+set_version() {
+  "$PLISTBUDDY" -c "Set :CFBundleShortVersionString $MARKETING_VERSION" "$1"
+  "$PLISTBUDDY" -c "Set :CFBundleVersion $BUILD_NUMBER" "$1"
+}
+
 rm -rf build
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
@@ -12,6 +24,7 @@ swift build -c release --arch arm64 --arch x86_64
 BIN="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)/LinkCepte"
 cp "$BIN" "$APP/Contents/MacOS/LinkCepte"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
+set_version "$APP/Contents/Info.plist"
 
 # Dil klasörleri (sistem menüleri ve Servisler menüsü başlığı için)
 mkdir -p "$APP/Contents/Resources/tr.lproj" "$APP/Contents/Resources/en.lproj"
@@ -32,7 +45,7 @@ iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
 rm -rf "$ICONSET"
 
 # Paylaş eklentisi (Safari Paylaş menüsü). Derlenemezse uygulama eklentisiz devam eder.
-if bash ./build_share.sh "$APP"; then
+if bash scripts/build_share.sh "$APP"; then
   echo "Paylaş eklentisi eklendi"
 else
   echo "UYARI: Paylaş eklentisi derlenemedi, uygulama eklentisiz hazırlanıyor"
