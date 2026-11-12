@@ -1,6 +1,6 @@
 import Foundation
 
-struct Entry: Identifiable, Hashable {
+struct Entry: Identifiable, Hashable, Sendable {
     let name: String
     let url: URL
     let isDir: Bool

@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 struct MainView: View {
     @EnvironmentObject var m: Model

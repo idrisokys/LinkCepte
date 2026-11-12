@@ -1,7 +1,7 @@
 import Foundation
 
 /// Arama sonucu: bulunan öğe, bulunduğu klasör zinciri ve gösterilecek özet.
-struct Hit: Identifiable {
+struct Hit: Identifiable, Sendable {
     let entry: Entry
     let path: [Entry]
     let detail: String

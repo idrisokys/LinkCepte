@@ -20,11 +20,12 @@ extension Model {
         searchFlag = flag
         searchQuery = q
         hits = nil
-        Task.detached { [weak self] in
-            let r = Store.search(root: rootURL, query: q, alive: { !flag.isCancelled })
-            await MainActor.run {
-                if !flag.isCancelled { self?.hits = r }
-            }
+        Task { [weak self] in
+            // Ağır tarama arka planda; sonuç ana aktörde (Model @MainActor) yazılır.
+            let r = await Task.detached(priority: .userInitiated) {
+                Store.search(root: rootURL, query: q, alive: { !flag.isCancelled })
+            }.value
+            if !flag.isCancelled { self?.hits = r }
         }
     }
 
