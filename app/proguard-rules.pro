@@ -1,1 +1,0 @@
-# Ek kural gerekmiyor
